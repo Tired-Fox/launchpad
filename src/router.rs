@@ -5,7 +5,7 @@ use hyper::Method;
 
 use crate::RouteCallback;
 
-static ERROR_CODES: phf::Map<u16, &'static str> = phf_map! {
+static ERROR_MESSAGES: phf::Map<u16, &'static str> = phf_map! {
     100u16 => "Continue",
     101u16 => "Switching protocols",
     102u16 => "Processing",
@@ -181,7 +181,7 @@ impl Router {
                 callback()
             },
             _ => {
-                match ERROR_CODES.get(&code) {
+                match ERROR_MESSAGES.get(&code) {
                     Some(message) => {
                         format!(r#"
 <h1 style="text-align: center">{} {}</h1>
