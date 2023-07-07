@@ -155,6 +155,7 @@ async fn handler(
                     }
                 },
                 _ => {
+                    // PERF: Should remove this. Not sure if this will be wanted.
                     if path_buff.with_extension("js").is_file() {
                         response!(fs::read_to_string(path_buff.to_str().unwrap()).expect("Could not read from file"))
                     } else {
