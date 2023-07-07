@@ -1,4 +1,3 @@
-use bytes::Bytes;
 extern crate web;
 
 use web::{prelude::*, Server, Router, Response};
