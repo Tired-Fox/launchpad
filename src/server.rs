@@ -155,27 +155,26 @@ async fn handler(
                     }
                 },
                 _ => {
-                    let (resp_tx, resp_rx) = oneshot::channel();
-                    router
-                        .send(Command::Error {
-                            code: 404,
-                            response: resp_tx,
-                        })
-                        .await
-                        .unwrap();
-                    let message = resp_rx.await.unwrap();
-                    response!(message)
+                    if path_buff.with_extension("js").is_file() {
+                        response!(fs::read_to_string(path_buff.to_str().unwrap()).expect("Could not read from file"))
+                    } else {
+                        let (resp_tx, resp_rx) = oneshot::channel();
+                        router
+                            .send(Command::Error {
+                                code: 404,
+                                response: resp_tx,
+                            })
+                            .await
+                            .unwrap();
+                        let message = resp_rx.await.unwrap();
+                        response!(message)
+                    }
                 }
             }
         },
         Some(_) => {
             if !path_buff.is_file() {
-                let path_buff = path_buff.with_extension(".js");
-                if !path_buff.is_file() {
-                    error!(404)
-                } else {
-                    response!(fs::read_to_string(path_buff.to_str().unwrap()).expect("Could not read from file"))
-                }
+                error!(404)
             } else {
                 response!(fs::read_to_string(path).expect("Could not read from file"))
             }
