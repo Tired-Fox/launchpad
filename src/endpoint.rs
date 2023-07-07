@@ -1,11 +1,17 @@
 use http_body_util::Full;
-use hyper::{server::conn::http1, service::service_fn, Response, body::Incoming};
 pub use hyper::Method;
+use hyper::{body::Incoming, server::conn::http1, service::service_fn, Response};
 use std::{collections::HashMap, convert::Infallible, fmt::Display, net::SocketAddr};
 
 use bytes::Bytes;
-use tokio::{net::TcpListener, sync::{mpsc::{self, Sender}, oneshot}};
 use std::sync::{Arc, Mutex};
+use tokio::{
+    net::TcpListener,
+    sync::{
+        mpsc::{self, Sender},
+        oneshot,
+    },
+};
 
 pub type RequestCallback = fn(hyper::Request<Incoming>) -> Result<Bytes, (u16, String)>;
 
@@ -47,20 +53,25 @@ macro_rules! method {
     };
 }
 
-pub fn create_router()
+// pub fn create_router()
 
 #[macro_export]
 macro_rules! routes {
     { $([$path: literal$($methods:tt)*] => $callback: ident),* $(,)?} => {
-        let router = Router::new();
-        $(
-            router.set(Request::new(methods: routes!( @methods, $($methods)*), callback: $callback), $path.to_string())
-        )*
+        Router::from([
+            $(
+                (
+                    routes!(@methods $($methods)*),
+                    $path.to_string(),
+                    $callback as $crate::endpoint::RequestCallback,
+                )
+            ),*
+        ])
     };
-    ( @methods, $(:)+ $($method: ident),*) => {
+    ( @methods $(:)+ $($method: ident),*) => {
         vec![$($crate::method!($method),)*]
     };
-    ( @methods,) => {};
+    ( @methods) => {};
 }
 
 pub struct Server {
@@ -73,8 +84,8 @@ enum Command {
     Get {
         method: Method,
         path: String,
-        response: oneshot::Sender<Option<RequestCallback>>
-    }
+        response: oneshot::Sender<Option<RequestCallback>>,
+    },
 }
 
 impl Server {
@@ -90,14 +101,20 @@ impl Server {
         let (tx, mut rx) = mpsc::channel::<Command>(32);
         let router = self.router.clone();
 
-        let route_manager = tokio::spawn(async move {
+        tokio::spawn(async move {
             while let Some(cmd) = rx.recv().await {
                 use Command::Get;
 
                 match cmd {
-                    Get { method, path, response } => {
+                    Get {
+                        method,
+                        path,
+                        response,
+                    } => {
                         let router = router.lock().unwrap();
-                        response.send(router.get(method, path).map(|f| f.clone()));
+                        response
+                            .send(router.get(method, path).map(|f| f.clone()))
+                            .unwrap();
                     }
                 }
             }
@@ -119,35 +136,38 @@ impl Server {
     }
 
     pub fn router(self, router: Router) -> Self {
-        Server { router: Arc::new(Mutex::new(router)), ..self }
+        Server {
+            router: Arc::new(Mutex::new(router)),
+            ..self
+        }
     }
 }
 
 async fn handler(
     req: hyper::Request<hyper::body::Incoming>,
-    router: Sender<Command>
+    router: Sender<Command>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
-
     let (resp_tx, resp_rx) = oneshot::channel();
-    router.send(Command::Get { method: req.method().clone(), path: req.uri().path().to_string(), response: resp_tx });
+    router
+        .send(Command::Get {
+            method: req.method().clone(),
+            path: req.uri().path().to_string(),
+            response: resp_tx,
+        })
+        .await
+        .unwrap();
 
-    let endpoint =  resp_rx.await.unwrap();
+    let endpoint = resp_rx.await.unwrap();
     let response = match endpoint {
-        Some(callback) => {
-            match callback(req) {
-                Ok(response) => Response::new(Full::new(response)),
-                Err((code, message)) => {
-                    Response::builder()
-                        .status(code)
-                        .body(Full::new(Bytes::from(message)))
-                        .unwrap()
-                }
-            }
+        Some(callback) => match callback(req) {
+            Ok(response) => Response::new(Full::new(response)),
+            Err((code, message)) => Response::builder()
+                .status(code)
+                .body(Full::new(Bytes::from(message)))
+                .unwrap(),
         },
         // TODO: Add logic for getting user defined error handlers
-        _ => {
-            Response::new(Full::new(Bytes::from("<h1>404 Not Found</h1>")))
-        }
+        _ => Response::new(Full::new(Bytes::from("<h1>404 Not Found</h1>"))),
     };
 
     // let response = match path {
@@ -182,17 +202,11 @@ impl Request {
 #[derive(Debug, Clone)]
 pub struct Router(HashMap<Method, HashMap<String, RequestCallback>>);
 
-impl From<Vec<(Vec<Method>, String, RequestCallback)>> for Router {
-    fn from(value: Vec<(Vec<Method>, String, RequestCallback)>) -> Self {
+impl<const SIZE: usize> From<[(Vec<Method>, String, RequestCallback); SIZE]> for Router {
+    fn from(value: [(Vec<Method>, String, RequestCallback); SIZE]) -> Self {
         let mut router = Router::new();
         for val in value {
-            router.set(
-                Request::new(
-                    val.0,
-                    val.2
-                ),
-                val.1,
-            )
+            router.set(Request::new(val.0, val.2), val.1)
         }
         router
     }
@@ -206,10 +220,8 @@ impl Router {
     fn get<S: Display>(&self, method: Method, path: S) -> Option<&RequestCallback> {
         let path = path.to_string();
         match self.0.get(&method) {
-            Some(bucket) => {
-                bucket.get(&path)
-            },
-            _ => None
+            Some(bucket) => bucket.get(&path),
+            _ => None,
         }
     }
 
