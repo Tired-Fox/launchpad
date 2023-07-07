@@ -42,9 +42,9 @@ PRESETS = {
 </svg>\
 """,
     "made_with_rust": """\
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="163.75"
-    height="28" role="img" aria-label="MADE WITH: RUST">
-    <title>MADE WITH: RUST</title>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="189.75"
+    height="28" role="img" aria-label="MADE WITH: PYTHON">
+    <title>MADE WITH: PYTHON</title>
     <g shape-rendering="crispEdges">
         <rect width="88.25" height="28" fill="#ef4041" />
         <rect x="88.25" width="75.5" height="28" fill="#c1282d" />
@@ -238,7 +238,7 @@ def collect_and_write(out_dir: str, links: list[tuple[Name, Url]]):
     for link in links:
         with (path / link[0]).with_suffix(".svg").open("wb") as output:
             print("Generating badge:", (path / link[0]).with_suffix(".svg"))
-            data = requests.get(link[1], verify=False).content
+            data = requests.get(link[1]).content
             output.write(data)
 
 
@@ -303,10 +303,10 @@ class Badges:
                 for link in result:
                     with (path / link[0]).with_suffix(".svg").open("wb") as output:
                         print("Generating badge:", (path / link[0]).with_suffix(".svg"))
-                        data = requests.get(link[1], verify=False).content
+                        data = requests.get(link[1]).content
                         output.write(data)
             else:
                 with (path / result[0]).with_suffix(".svg").open("wb") as output:
                     print("Generating badge:", (path / result[0]).with_suffix(".svg"))
-                    data = requests.get(result[1], verify=False).content
+                    data = requests.get(result[1]).content
                     output.write(data)
