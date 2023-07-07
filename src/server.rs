@@ -175,7 +175,20 @@ async fn handler(
         },
         Some(_) => {
             if !path_buff.is_file() {
-                error!(404)
+                if path_buff.to_str().unwrap().ends_with("html") {
+                    let (resp_tx, resp_rx) = oneshot::channel();
+                    router
+                        .send(Command::Error {
+                            code: 404,
+                            response: resp_tx,
+                        })
+                        .await
+                        .unwrap();
+                    let message = resp_rx.await.unwrap();
+                    response!(message)
+                } else {
+                    error!(404)
+                }
             } else {
                 response!(fs::read_to_string(path).expect("Could not read from file"))
             }
