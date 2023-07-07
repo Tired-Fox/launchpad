@@ -1,39 +1,37 @@
 use bytes::Bytes;
-use hyper::{body::Incoming, Request};
-
 extern crate web;
-use web::endpoint::{Method, Router, Server};
-use web::prelude::*;
+
+use web::{prelude::*, Server, Router, Response};
 
 #[tokio::main]
 async fn main() {
-    let routes: Router = routes! {
-        ["/": get, post] => message,
-        ["/hello": get] => hello,
-    };
-
-    println!("{:?}", routes);
-
-    // let router = Router::from([
-    //     (vec![Method::Get], "/hello", hello)
-    // ]);
-
-    // println!("{:?}", _routes);
     Server::new(([127, 0, 0, 1], 3000))
-        .router(routes)
+        .router(routes! {
+            ["/": get, post] => message,
+            ["/hello": get] => hello,
+        })
         .serve()
         .await;
 }
 
-fn message(req: Request<Incoming>) -> Result<Bytes, (u16, String)> {
-    Ok("Hello, World!".into())
+// #[route("/", methods=[get, post])]
+fn message(_cx: Option<String>) -> Response {
+    r#"<html>
+        <head>
+            <title>Home</title>
+        </head>
+        <body>
+            <h1>Hello World</h1>
+            <ul>
+                <li>Welcome</li>
+                <li>to</li>
+                <li>LaunchPad</li>
+            </ul>
+        </body>
+    </html>"#.into()
 }
 
-// #[get("/hello")]
-fn hello(req: Request<Incoming>) -> Result<Bytes, (u16, String)> {
-    // Ok("".into())
-    // Ok(4.into())
-    // Err(404, "")
-    Ok("Hello".into())
-    // Err((404, "Not Found".to_string()))
+fn hello(_cx: Option<String>) -> Response {
+    // "Hello".into()
+    500.into()
 }

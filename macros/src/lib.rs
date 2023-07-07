@@ -1,34 +1,34 @@
 extern crate proc_macro;
-use std::collections::HashSet;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, parse_macro_input, punctuated::Punctuated, Ident, Token, FnArg, Type, ItemFn};
+use syn::{parse::Parse, parse_macro_input, FnArg, Type, ItemFn, LitStr};
 
 struct Args {
-    vars: HashSet<Ident>,
+    path: LitStr,
 }
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let vars = Punctuated::<Ident, Token![,]>::parse_terminated(input)?;
-        Ok(Args {
-            vars: vars.into_iter().collect(),
-        })
+        if input.peek(LitStr) {
+            Ok(Args {
+                path: input.parse()?
+            })
+        } else {
+            Err(input.error("Expected path string"))
+        }
+        // let vars = Punctuated::<Meta, Token![,]>::parse_terminated(input)?;
     }
 }
 
 #[proc_macro_attribute]
 pub fn get(args: TokenStream, function: TokenStream) -> TokenStream {
+    let result = function.clone();
     assert!(!args.is_empty(), "requires an argument");
     let func: ItemFn = parse_macro_input!(function);
-    let args: Vec<String> = parse_macro_input!(args as Args)
-        .vars
-        .iter()
-        .map(|i| i.to_string())
-        .collect();
-    assert!(args.len() == 1, "only one argument is allowed");
+    let args: Args = parse_macro_input!(args as Args);
 
+    println!("{:?}", args.path.value());
     for arg in func.sig.inputs.iter() {
         match arg {
             FnArg::Typed(pat_type) => {
@@ -43,5 +43,7 @@ pub fn get(args: TokenStream, function: TokenStream) -> TokenStream {
         }
     }
 
-    quote! {Request::new(vec![Method::Get], Arc::new(|req| None))}.into()
+    // Request::new(vec![Method::Get], Arc::new(|req| None));
+    // quote! { fn #func.}.into()
+    result
 }

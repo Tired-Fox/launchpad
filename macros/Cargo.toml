@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 quote = "1.0.29"
-syn = { version = "2.0.23", features = ["full", "fold"] }
+syn = { version = "2.0.23", features = ["full", "fold", "extra-traits"] }
 syn-mid = "0.5.4"
 
 [lib]
