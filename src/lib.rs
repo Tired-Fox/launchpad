@@ -1,5 +1,8 @@
 use std::fmt::Display;
 
+// PERF: Temp
+pub mod v2;
+
 pub mod server;
 pub mod prelude;
 pub mod template;
@@ -7,6 +10,7 @@ pub mod router;
 
 pub use router::Router;
 pub use server::Server;
+use v2::endpoint::Responder;
 
 // pub trait IntoBytes: Sized {
 //     fn into_bytes(self) -> bytes::Bytes;

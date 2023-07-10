@@ -1,5 +1,5 @@
 [package]
-name = "web"
+name = "launchpad"
 version = "0.1.0"
 edition = "2021"
 
@@ -14,3 +14,4 @@ macros = { path = "macros" }
 serde_json = "1.0.100"
 serde = "1.0.167"
 phf = { version = "0.11.2", features = ["macros", "phf_macros"] }
+cargo-expand = "1.0.59"

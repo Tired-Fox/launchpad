@@ -13,12 +13,11 @@ async fn main() {
         .await;
 }
 
-// #[route("/", methods=[get, post])]
 fn message(_cx: Option<String>) -> Response {
     // PERF: Support for return type of Responder.
     // templating with HandleBars and Tera
     // Macro based `rsx` / templating
-    r#"<html>
+    r#"<html lang="en">
         <head>
             <title>Home</title>
         </head>

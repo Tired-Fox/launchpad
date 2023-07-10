@@ -1,59 +1,108 @@
-extern crate web;
-use bytes::Bytes;
-use web::{prelude::*, Response, Router, Server};
+extern crate launchpad;
+use std::sync::{Arc, Mutex, MutexGuard};
+
+use launchpad::router;
+use launchpad::v2::state::Empty;
+use launchpad::{
+    prelude::*,
+    v2::{
+        endpoint::{Context, Endpoint, Result},
+        state::State,
+        Response, Server,
+    },
+};
 
 #[tokio::main]
 async fn main() {
     Server::new(([127, 0, 0, 1], 3000))
-        .router(router! {
-            "/" => message,
-            "/hello" => hello,
-        })
+        .router(router![world])
         .serve()
         .await;
 }
 
-struct Context;
-
-trait Responder {
-    fn into_response(self) -> bytes::Bytes;
+#[derive(Debug, Default)]
+struct WorldState {
+    pub name: String,
+    pub count: u16,
 }
 
-type Result<T: Responder> = std::result::Result<T, u16>;
-
-impl Responder for &str {
-    fn into_response(self) -> bytes::Bytes {
-        Bytes::from(self.to_string())
+#[get("/hello-world")]
+fn world(state: &mut State<WorldState>) -> Result<String> {
+    // PERF: Get a better way of manipulating state so it doesn't block for too long
+    state.inner_mut().count += 1;
+    if state.inner().name == "".to_string() {
+        state.inner_mut().name = "Zachary".to_string();
     }
+
+    Ok(format!("Hello World, and {}: {} times", state.inner().name, state.inner().count))
 }
 
-#[route("/", methods=[get, post])]
-fn message(_cx: Context) -> Result<&'static str> {
-    // PERF: Support for return type of Responder.
-    // templating with HandleBars and Tera
-    // Macro based `rsx` / templating
-    Ok(r#"<html>
-        <head>
-            <title>Home</title>
-        </head>
-        <body>
-            <h1>Hello World</h1>
-            <ul>
-                <li>Welcome</li>
-                <li>to</li>
-                <li>LaunchPad</li>
-            </ul>
-        </body>
-    </html>"#)
+#[post("/")]
+fn home() -> Result<&'static str> {
+    Ok("Home")
 }
 
-#[get("/")]
-fn hello(_cx: Option<String>) -> Result<&'static str> {
-    // "Hello".into()
-    Err(500)
-}
+// #[derive(Debug)]
+// struct World(Mutex<State<WorldState>>);
+// impl Endpoint for World {
+//     fn methods(&self) -> Vec<Method> {
+//         vec![Method::GET]
+//     }
 
-#[component]
-fn button(_cx: Option<String>, name: &str) -> String {
-    format!("<button>{}</button>", name)
-}
+//     fn path(&self) -> String {
+//         String::from("/")
+//     }
+
+//     fn call(&self) -> Response {
+//         fn endpoint_call(state: &mut State<WorldState>) -> Result<String> {
+//             state.inner_mut().count += 1;
+//             if state.inner().name == "".to_string() {
+//                 state.inner_mut().name = "Zachary".to_string();
+//             }
+
+//             Ok(format!("Hello World, and {:?}: {} times", state.inner().name, state.inner().count))
+//         }
+
+//         let mut lock_state = self.0.lock().unwrap();
+//         match endpoint_call(&mut *lock_state) {
+//             Ok(data) => Response::from(data),
+//             Err(code) => Response::from(code),
+//         }
+//     }
+// }
+
+// #[route("/", methods=[get, post])]
+// fn message(_cx: Context) -> Result<&'static str> {
+//     // PERF: Support for return type of Responder.
+//     // templating with HandleBars and Tera
+//     // Macro based `rsx` / templating
+//     Ok(r#"<html>
+//         <head>
+//             <title>Home</title>
+//         </head>
+//         <body>
+//             <h1>Hello World</h1>
+//             <ul>
+//                 <li>Welcome</li>
+//                 <li>to</li>
+//                 <li>LaunchPad</li>
+//             </ul>
+//         </body>
+//     </html>"#)
+// }
+
+// macro_rules! rsx {
+//     ($($markup:tt)*) => {
+//         Element
+//     };
+// }
+
+// #[component]
+// fn button(cx: Option<String>, children: Vec<Element>, name: &str) -> Element {
+//     rsx! {
+//         <button @click={|e| cx.find("#message>div").toggle("d-none")}>
+//             {name}
+//             {children}
+//         <button/>
+//     }
+// }
