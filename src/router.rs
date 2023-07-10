@@ -95,7 +95,7 @@ macro_rules! routes {
                         $endpoint( std::sync::Mutex::new($crate::state::State::default()) )
                     )
                 ),
-            ),*
+            )*
         ])
     }
 }

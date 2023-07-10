@@ -1,11 +1,12 @@
 extern crate proc_macro;
 
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    parse::Parse, parse_macro_input, FnArg, GenericArgument, ItemFn, LitStr, PatType, PathArguments, Type
+    bracketed, parse::Parse, parse_macro_input, punctuated::Punctuated, FnArg, GenericArgument,
+    Ident, ItemFn, LitStr, PatType, PathArguments, Token, Type, Result,
 };
 
 macro_rules! route_expand {
@@ -14,27 +15,54 @@ macro_rules! route_expand {
         pub fn $name(args: TokenStream, function: TokenStream) -> TokenStream {
             assert!(!args.is_empty(), "requires a path argument");
             let func: ItemFn = parse_macro_input!(function);
-            let args: Args = parse_macro_input!(args as Args);
-        
-            build_endpoint(args, func, quote!(vec![hyper::Method::$method]))
+            let mut args: Args = parse_macro_input!(args as Args);
+            args.methods.push(stringify!($method).to_string());
+
+            build_endpoint(args, func)
         }
     };
 }
 
+#[proc_macro_attribute]
+pub fn request(args: TokenStream, function: TokenStream) -> TokenStream {
+    assert!(!args.is_empty(), "requires a path and methods arguments");
+    let func: ItemFn = parse_macro_input!(function);
+    let args: Args = parse_macro_input!(args as Args);
+
+    build_endpoint(args, func)
+}
+
 struct Args {
     path: LitStr,
+    methods: Vec<String>,
 }
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        if input.peek(LitStr) {
-            Ok(Args {
-                path: input.parse()?,
-            })
-        } else {
-            Err(input.error("Expected path string"))
+        let path: LitStr = input.parse()?;
+        let _: Result<Token![,]> = input.parse();
+
+        let mut methods = Punctuated::new();
+        if input.peek(Ident) {
+            let next: Ident = input.parse()?;
+            if next != "methods" {
+                return Err(input.error("Unkown argument"));
+            }
+
+            let _: Token![=] = input.parse()?;
+            let list;
+            bracketed!(list in input);
+
+            methods = Punctuated::<Ident, Token![,]>::parse_terminated(&list)?;
         }
-        // let vars = Punctuated::<Meta, Token![,]>::parse_terminated(input)?;
+
+        Ok(Args {
+            path,
+            methods: methods
+                .iter()
+                .map(|m| m.to_string().to_uppercase())
+                .collect(),
+        })
     }
 }
 
@@ -84,11 +112,19 @@ fn has_state(props: &Vec<Type>) -> (bool, bool, Option<Type>) {
     (false, false, None)
 }
 
-fn build_endpoint(args: Args, function: ItemFn, methods: TokenStream2) -> TokenStream {
+fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
     let path = args.path.value();
     let name = function.sig.ident.clone();
     let props = parse_props(function.clone());
 
+    let methods = args
+        .methods
+        .iter()
+        .map(|m| format!("hyper::Method::{}", m))
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    let methods: TokenStream2 = format!("vec![{}]", methods).parse::<TokenStream>().unwrap().into();
     let (state, state_mutable, elem) = has_state(&props);
     let (stype, state) = match state {
         true => {
@@ -97,28 +133,31 @@ fn build_endpoint(args: Args, function: ItemFn, methods: TokenStream2) -> TokenS
                 quote!(#elem),
                 match state_mutable {
                     true => quote!(
-                        let mut lock_state = self.0.lock().unwrap();
-                        match #name(&mut *lock_state) {
-                            Ok(data) => launchpad::Response::from(data),
-                            Err(code) => launchpad::Response::from(code),
+                        let mut __lock_state = self.0.lock().unwrap();
+                        match #name(&mut *__lock_state) {
+                            Ok(__data) => launchpad::Response::from(__data),
+                            Err(__code) => launchpad::Response::from(__code),
                         }
                     ),
                     _ => quote!(
-                        let mut lock_state = self.0.lock().unwrap();
-                        match #name(&*lock_state) {
-                            Ok(data) => launchpad::Response::from(data),
-                            Err(code) => launchpad::Response::from(code),
+                        let mut __lock_state = self.0.lock().unwrap();
+                        match #name(&*__lock_state) {
+                            Ok(__data) => launchpad::Response::from(__data),
+                            Err(__code) => launchpad::Response::from(__code),
                         }
                     ),
                 },
             )
         }
-        _ => (quote!(launchpad::state::Empty), quote!(
-            match #name() {
-                Ok(data) => launchpad::Response::from(data),
-                Err(code) => launchpad::Response::from(code),
-            }
-        )),
+        _ => (
+            quote!(launchpad::state::Empty),
+            quote!(
+                match #name() {
+                    Ok(__data) => launchpad::Response::from(__data),
+                    Err(__code) => launchpad::Response::from(__code),
+                }
+            ),
+        ),
     };
 
     quote! {
@@ -150,3 +189,8 @@ route_expand!(get, GET);
 route_expand!(post, POST);
 route_expand!(delete, DELETE);
 route_expand!(put, PUT);
+route_expand!(options, OPTIONS);
+route_expand!(head, HEAD);
+route_expand!(trace, TRACE);
+route_expand!(connect, CONNECT);
+route_expand!(patch, PATCH);

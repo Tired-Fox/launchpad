@@ -5,7 +5,7 @@ use launchpad::{prelude::*, Server, State};
 #[tokio::main]
 async fn main() {
     Server::new(([127, 0, 0, 1], 3000))
-        .router(routes![world])
+        .router(routes![world, home])
         .serve()
         .await;
 }
@@ -31,8 +31,28 @@ fn world(state: &mut State<WorldState>) -> Result<String> {
     ))
 }
 
-#[post("/")]
+#[request("/", methods=[get, post])]
 fn home() -> Result<&'static str> {
+    // PERF: Support for return type of Responder.
+    // templating with HandleBars and Tera
+    // Macro based `rsx` / templating
+    Ok(r#"<html>
+        <head>
+            <title>Home</title>
+        </head>
+        <body>
+            <h1>Hello World</h1>
+            <ul>
+                <li>Welcome</li>
+                <li>to</li>
+                <li>LaunchPad</li>
+            </ul>
+        </body>
+    </html>"#)
+}
+
+#[post("/")]
+fn data() -> Result<&'static str> {
     Ok("Home")
 }
 
@@ -63,26 +83,6 @@ fn home() -> Result<&'static str> {
 //             Err(code) => Response::from(code),
 //         }
 //     }
-// }
-
-// #[route("/", methods=[get, post])]
-// fn message(_cx: Context) -> Result<&'static str> {
-//     // PERF: Support for return type of Responder.
-//     // templating with HandleBars and Tera
-//     // Macro based `rsx` / templating
-//     Ok(r#"<html>
-//         <head>
-//             <title>Home</title>
-//         </head>
-//         <body>
-//             <h1>Hello World</h1>
-//             <ul>
-//                 <li>Welcome</li>
-//                 <li>to</li>
-//                 <li>LaunchPad</li>
-//             </ul>
-//         </body>
-//     </html>"#)
 // }
 
 // macro_rules! rsx {
