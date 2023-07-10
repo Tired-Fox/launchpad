@@ -11,8 +11,6 @@ pub trait Responder {
     fn into_response(self) -> bytes::Bytes;
 }
 
-pub type Result<T> = std::result::Result<T, u16>;
-
 pub trait Endpoint: Debug + Sync + Send {
     fn call(&self) -> Response;
     fn path(&self) -> String;

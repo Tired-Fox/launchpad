@@ -94,29 +94,29 @@ fn build_endpoint(args: Args, function: ItemFn, methods: TokenStream2) -> TokenS
         true => {
             let elem = elem.unwrap();
             (
-                quote!((std::sync::Mutex<launchpad::v2::state::State<#elem>>)),
+                quote!(#elem),
                 match state_mutable {
                     true => quote!(
                         let mut lock_state = self.0.lock().unwrap();
                         match #name(&mut *lock_state) {
-                            Ok(data) => launchpad::v2::Response::from(data),
-                            Err(code) => launchpad::v2::Response::from(code),
+                            Ok(data) => launchpad::Response::from(data),
+                            Err(code) => launchpad::Response::from(code),
                         }
                     ),
                     _ => quote!(
                         let mut lock_state = self.0.lock().unwrap();
                         match #name(&*lock_state) {
-                            Ok(data) => launchpad::v2::Response::from(data),
-                            Err(code) => launchpad::v2::Response::from(code),
+                            Ok(data) => launchpad::Response::from(data),
+                            Err(code) => launchpad::Response::from(code),
                         }
                     ),
                 },
             )
         }
-        _ => (quote!(), quote!(
+        _ => (quote!(launchpad::state::Empty), quote!(
             match #name() {
-                Ok(data) => launchpad::v2::Response::from(data),
-                Err(code) => launchpad::v2::Response::from(code),
+                Ok(data) => launchpad::Response::from(data),
+                Err(code) => launchpad::Response::from(code),
             }
         )),
     };
@@ -124,10 +124,10 @@ fn build_endpoint(args: Args, function: ItemFn, methods: TokenStream2) -> TokenS
     quote! {
          #[derive(Debug)]
          #[allow(non_camel_case_types)]
-         struct #name #stype;
+         struct #name(std::sync::Mutex<launchpad::state::State<#stype>>);
 
          #[allow(non_camel_case_types)]
-         impl Endpoint for #name {
+         impl launchpad::endpoint::Endpoint for #name {
              fn methods(&self) -> Vec<hyper::Method> {
                  #methods
              }
@@ -136,7 +136,7 @@ fn build_endpoint(args: Args, function: ItemFn, methods: TokenStream2) -> TokenS
                  String::from(#path)
              }
 
-             fn call(&self) -> Response {
+             fn call(&self) -> launchpad::Response {
                  #function
 
                  #state

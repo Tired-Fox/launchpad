@@ -1,73 +1,29 @@
-use std::fmt::Display;
-
-// PERF: Temp
-pub mod v2;
-
-pub mod server;
+pub mod endpoint;
 pub mod prelude;
-pub mod template;
+
 pub mod router;
+pub mod server;
+pub mod state;
 
 pub use router::Router;
 pub use server::Server;
-use v2::endpoint::Responder;
+pub use state::State;
 
-// pub trait IntoBytes: Sized {
-//     fn into_bytes(self) -> bytes::Bytes;
-// }
+use std::fmt::Display;
 
-// impl IntoBytes for &str {
-//     fn into_bytes(self) -> bytes::Bytes {
-//         bytes::Bytes::from(self)
-//     }
-// }
-// impl IntoBytes for String {
-//     fn into_bytes(self) -> bytes::Bytes {
-//         bytes::Bytes::from(self)
-//     }
-// }
-// impl IntoBytes for &[u8] {
-//     fn into_bytes(self) -> bytes::Bytes {
-//         bytes::Bytes::from(self)
-//     }
-// }
-// impl IntoBytes for Vec<u8> {
-//     fn into_bytes(self) -> bytes::Bytes {
-//         bytes::Bytes::from(self)
-//     }
-// }
+use bytes::Bytes;
+use endpoint::Responder;
 
-pub trait IntoParam<Result> {
-    fn into_response(self) -> Result;
-}
-
-impl IntoParam<Option<String>> for Option<String> {
-    fn into_response(self) -> Option<String> {
-        self
-    }
-}
-
-impl IntoParam<Option<String>> for String {
-    fn into_response(self) -> Option<String> {
-        Some(self)
-    }
-}
-
-impl IntoParam<Option<String>> for &str {
-    fn into_response(self) -> Option<String> {
-        Some(self.to_string())
-    }
-}
+pub type Result<T> = std::result::Result<T, u16>;
 
 pub enum Response {
     Success(bytes::Bytes),
-    Error(u16)
+    Error(u16),
 }
 
-impl Response {
-    fn success<RES>(data: RES) -> Self 
-    where RES: Display {
-        Response::Success(bytes::Bytes::from(data.to_string()))
+impl<T: Responder> From<T> for Response {
+    fn from(value: T) -> Self {
+        Response::Success(value.into_response())
     }
 }
 
@@ -77,16 +33,38 @@ impl From<u16> for Response {
     }
 }
 
-impl From<String> for Response {
-    fn from(value: String) -> Self {
-        Response::Success(bytes::Bytes::from(value))
+impl Response {
+    fn success<RES>(data: RES) -> Self
+    where
+        RES: Display,
+    {
+        Response::Success(bytes::Bytes::from(data.to_string()))
     }
 }
 
-impl From<&str> for Response {
-    fn from(value: &str) -> Self {
-        Response::Success(bytes::Bytes::from(value.to_string()))
+// Default Responder implmentation types
+impl Responder for &str {
+    fn into_response(self) -> bytes::Bytes {
+        Bytes::from(self.to_string())
     }
 }
-
-pub type RouteCallback = fn(Option<String>) -> Response;
+impl Responder for String {
+    fn into_response(self) -> bytes::Bytes {
+        Bytes::from(self)
+    }
+}
+impl Responder for &[u8] {
+    fn into_response(self) -> bytes::Bytes {
+        Bytes::from(self.to_vec())
+    }
+}
+impl Responder for Vec<u8> {
+    fn into_response(self) -> bytes::Bytes {
+        Bytes::from(self)
+    }
+}
+impl Responder for Bytes {
+    fn into_response(self) -> bytes::Bytes {
+        self
+    }
+}

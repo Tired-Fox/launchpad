@@ -1,7 +1,7 @@
 use http_body_util::Full;
 pub use hyper::Method;
 use hyper::{server::conn::http1, service::service_fn};
-use std::{convert::Infallible, net::SocketAddr, path::PathBuf, fs};
+use std::{convert::Infallible, fs, net::SocketAddr, path::PathBuf};
 
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
@@ -13,8 +13,11 @@ use tokio::{
     },
 };
 
-use super::router::Router;
-use crate::{Response, RouteCallback};
+use super::{
+    endpoint::Context,
+    router::{Route, Router},
+    Response,
+};
 
 pub struct Server {
     addr: SocketAddr,
@@ -23,22 +26,22 @@ pub struct Server {
 
 macro_rules! response {
     ($data: expr) => {
-       hyper::Response::new(http_body_util::Full::new(bytes::Bytes::from($data)))
+        hyper::Response::new(http_body_util::Full::new(bytes::Bytes::from($data)))
     };
 }
 
 macro_rules! error {
     ($code: expr, $msg: expr) => {
-       hyper::Response::builder()
-           .status($code)
-           .body(http_body_util::Full::new(bytes::Bytes::from($msg)))
-           .unwrap() 
+        hyper::Response::builder()
+            .status($code)
+            .body(http_body_util::Full::new(bytes::Bytes::from($msg)))
+            .unwrap()
     };
     ($code: expr) => {
-       hyper::Response::builder()
-           .status($code)
-           .body(http_body_util::Full::new(bytes::Bytes::new()))
-           .unwrap() 
+        hyper::Response::builder()
+            .status($code)
+            .body(http_body_util::Full::new(bytes::Bytes::new()))
+            .unwrap()
     };
 }
 
@@ -47,7 +50,7 @@ enum Command {
     Get {
         method: Method,
         path: String,
-        response: oneshot::Sender<Option<RouteCallback>>,
+        response: oneshot::Sender<Option<Route>>,
     },
     Error {
         code: u16,
@@ -138,9 +141,11 @@ async fn handler(
 
             let endpoint = resp_rx.await.unwrap();
             match endpoint {
-                // PERF: Pass in data to callback \/
-                Some(callback) => match callback(None) {
-                    Response::Success(data) => hyper::Response::new(Full::new(data)),
+                // PERF: Pass uri data to callback              \/
+                Some(endpoint) => match endpoint.endpoint().call() {
+                    Response::Success(data) => {
+                        hyper::Response::new(Full::new(data))
+                    },
                     Response::Error(code) => {
                         let (resp_tx, resp_rx) = oneshot::channel();
                         router
@@ -155,24 +160,19 @@ async fn handler(
                     }
                 },
                 _ => {
-                    // PERF: Should remove this. Not sure if this will be wanted.
-                    if path_buff.with_extension("js").is_file() {
-                        response!(fs::read_to_string(path_buff.to_str().unwrap()).expect("Could not read from file"))
-                    } else {
-                        let (resp_tx, resp_rx) = oneshot::channel();
-                        router
-                            .send(Command::Error {
-                                code: 404,
-                                response: resp_tx,
-                            })
-                            .await
-                            .unwrap();
-                        let message = resp_rx.await.unwrap();
-                        response!(message)
-                    }
+                    let (resp_tx, resp_rx) = oneshot::channel();
+                    router
+                        .send(Command::Error {
+                            code: 404,
+                            response: resp_tx,
+                        })
+                        .await
+                        .unwrap();
+                    let message = resp_rx.await.unwrap();
+                    response!(message)
                 }
             }
-        },
+        }
         Some(_) => {
             if !path_buff.is_file() {
                 if path_buff.to_str().unwrap().ends_with("html") {

@@ -1,21 +1,11 @@
 extern crate launchpad;
-use std::sync::{Arc, Mutex, MutexGuard};
 
-use launchpad::router;
-use launchpad::v2::state::Empty;
-use launchpad::{
-    prelude::*,
-    v2::{
-        endpoint::{Context, Endpoint, Result},
-        state::State,
-        Response, Server,
-    },
-};
+use launchpad::{prelude::*, Server, State};
 
 #[tokio::main]
 async fn main() {
     Server::new(([127, 0, 0, 1], 3000))
-        .router(router![world])
+        .router(routes![world])
         .serve()
         .await;
 }
@@ -34,7 +24,11 @@ fn world(state: &mut State<WorldState>) -> Result<String> {
         state.inner_mut().name = "Zachary".to_string();
     }
 
-    Ok(format!("Hello World, and {}: {} times", state.inner().name, state.inner().count))
+    Ok(format!(
+        "Hello World, and {}: {} times",
+        state.inner().name,
+        state.inner().count
+    ))
 }
 
 #[post("/")]

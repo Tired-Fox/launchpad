@@ -1,16 +1,16 @@
-use std::{collections::HashMap, fmt::Display};
 use phf::phf_map;
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use hyper::Method;
 
-use crate::RouteCallback;
+use super::endpoint::Endpoint;
 
 static ERROR_MESSAGES: phf::Map<u16, &'static str> = phf_map! {
     100u16 => "Continue",
     101u16 => "Switching protocols",
     102u16 => "Processing",
     103u16 => "Early Hints",
-    
+
     200u16 => "OK",
     201u16 => "Created",
     202u16 => "Accepted",
@@ -21,7 +21,7 @@ static ERROR_MESSAGES: phf::Map<u16, &'static str> = phf_map! {
     207u16 => "Multi-Status",
     208u16 => "Already Reported",
     226u16 => "IM Used",
-       
+
     300u16 => "Multiple Choices",
     301u16 => "Moved Permanently",
     302u16 => "Found (Previously \"Moved Temporarily\")",
@@ -31,7 +31,7 @@ static ERROR_MESSAGES: phf::Map<u16, &'static str> = phf_map! {
     306u16 => "Switch Proxy",
     307u16 => "Temporary Redirect",
     308u16 => "Permanent Redirect",
-     
+
     400u16 => "Bad Request",
     401u16 => "Unauthorized",
     402u16 => "Payment Required",
@@ -61,7 +61,7 @@ static ERROR_MESSAGES: phf::Map<u16, &'static str> = phf_map! {
     429u16 => "Too Many Requests",
     431u16 => "Request Header Fields Too Large",
     451u16 => "Unavailable For Legal Reasons",
-       
+
     500u16 => "Internal Server Error",
     501u16 => "Not Implemented",
     502u16 => "Bad Gateway",
@@ -76,68 +76,63 @@ static ERROR_MESSAGES: phf::Map<u16, &'static str> = phf_map! {
 };
 
 #[macro_export]
-macro_rules! method {
-    (get) => {
-        hyper::Method::GET
-    };
-    (post) => {
-        hyper::Method::POST
-    };
-    (delete) => {
-        hyper::Method::DELETE
-    };
-    (put) => {
-        hyper::Method::PUT
-    };
-    (head) => {
-        hyper::Method::HEAD
-    };
-    (options) => {
-        hyper::Method::OPTIONS
-    };
-    (connect) => {
-        hyper::Method::CONNECT
-    };
-    (trace) => {
-        hyper::Method::TRACE
-    };
-    (patch) => {
-        hyper::Method::PATCH
-    };
-}
-
-// pub fn create_router()
-#[macro_export]
-macro_rules! methods {
-    ($(:)+ $($method: ident),*) => {
-        vec![$($crate::method!($method),)*]
-    };
-    () => {}
-}
-
-#[macro_export]
 macro_rules! routes {
-    { $([$path: literal$($methods:tt)*] => $callback: ident),* $(,)?} => {
-        Router::from([
+    { $($path: literal => $endpoint: ident),* $(,)?} => {
+        $crate::Router::from([
             $(
-                (
-                    $crate::methods!($($methods)*),
+                $crate::router::Route::new(
                     $path.to_string(),
-                    $callback as $crate::RouteCallback,
-                )
+                    std::sync::Arc::new($endpoint(std::sync::Mutex::new($crate::state::State::default())))
+                ),
             ),*
         ])
     };
+    [ $($endpoint: ident),* $(,)?] => {
+        $crate::Router::from([
+            $(
+                $crate::router::Route::from_endpoint(
+                    std::sync::Arc::new(
+                        $endpoint( std::sync::Mutex::new($crate::state::State::default()) )
+                    )
+                ),
+            ),*
+        ])
+    }
 }
 
-pub struct Route {
-    methods: Vec<Method>,
-    callback: RouteCallback,
-}
+#[derive(Debug)]
+pub struct Route(String, Arc<dyn Endpoint>);
 
 impl Route {
-    pub fn new(methods: Vec<Method>, callback: RouteCallback) -> Self {
-        Route { methods, callback }
+    pub fn new(path: String, endpoint: Arc<dyn Endpoint>) -> Self {
+        Route(path, endpoint)
+    }
+
+    pub fn from_endpoint(value: Arc<dyn Endpoint>) -> Self {
+        Route::new(value.path().clone(), value)
+    }
+
+    pub fn endpoint(&self) -> &Arc<dyn Endpoint> {
+        &self.1
+    }
+
+    pub fn endpoint_mut(&mut self) -> &mut Arc<dyn Endpoint> {
+        &mut self.1
+    }
+
+    pub fn path(&self) -> &String {
+        &self.0
+    }
+}
+
+impl Clone for Route {
+    fn clone(&self) -> Self {
+       Route(self.0.clone(), self.1.clone()) 
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.0 = source.0.clone();
+        self.1 = source.1.clone();
     }
 }
 
@@ -145,15 +140,15 @@ impl Route {
 /// where handler has certain request methods it can run with
 #[derive(Debug, Clone)]
 pub struct Router {
-    routes: HashMap<Method, HashMap<String, RouteCallback>>,
-    errors: HashMap<u16, fn() -> String>
+    routes: HashMap<Method, HashMap<String, Route>>,
+    errors: HashMap<u16, fn() -> String>,
 }
 
-impl<const SIZE: usize> From<[(Vec<Method>, String, RouteCallback); SIZE]> for Router {
-    fn from(value: [(Vec<Method>, String, RouteCallback); SIZE]) -> Self {
+impl<const SIZE: usize> From<[Route; SIZE]> for Router {
+    fn from(value: [Route; SIZE]) -> Self {
         let mut router = Router::new();
         for val in value {
-            router.set_route(Route::new(val.0, val.2), val.1)
+            router.set_route(val.path().clone(), val)
         }
         router
     }
@@ -163,33 +158,38 @@ impl Router {
     pub fn new() -> Self {
         Router {
             routes: HashMap::new(),
-            errors: HashMap::new()
+            errors: HashMap::new(),
         }
     }
 
-    pub fn get_route<S: Display>(&self, method: Method, path: S) -> Option<&RouteCallback> {
+    pub fn get_route<S: Display>(
+        &self,
+        method: Method,
+        path: S,
+    ) -> Option<&Route> {
         let path = path.to_string();
         match self.routes.get(&method) {
-            Some(bucket) => bucket.get(&path),
+            Some(bucket) => {
+                bucket.get(&path)
+            },
             _ => None,
         }
     }
 
     pub fn get_error(&self, code: u16) -> String {
         match self.errors.get(&code) {
-            Some(callback) => {
-                callback()
-            },
-            _ => {
-                match ERROR_MESSAGES.get(&code) {
-                    Some(message) => {
-                        format!(r#"
+            Some(callback) => callback(),
+            _ => match ERROR_MESSAGES.get(&code) {
+                Some(message) => {
+                    format!(
+                        r#"
 <h1 style="text-align: center">{} {}</h1>
-<div style="border-top: 1px solid black; margin-inline: 2rem"></div>"#, code, message)
-                    },
-                    _ => String::new()
+<div style="border-top: 1px solid black; margin-inline: 2rem"></div>"#,
+                        code, message
+                    )
                 }
-            }
+                _ => String::new(),
+            },
         }
     }
 
@@ -200,26 +200,23 @@ impl Router {
     /// Map an endpoint given the request type.
     ///
     /// If the mapping already exists it will be overridden
-    pub fn set_route<S>(&mut self, req: Route, path: S)
-    where
-        S: Display,
-    {
+    pub fn set_route<S: Display>(&mut self, path: S, req: Route) {
         let mut path = path.to_string();
         if path.ends_with("/") {
             path.pop();
         }
 
-        for method in req.methods {
+        for method in req.endpoint().methods() {
             match self.routes.get_mut(&method) {
                 Some(bucket) => {
-                    bucket.insert(path.clone(), req.callback);
+                    bucket.insert(path.clone(), req.clone());
                 }
                 None => {
                     self.routes.insert(method.clone(), HashMap::new());
                     self.routes
                         .get_mut(&method)
                         .unwrap()
-                        .insert(path.clone(), req.callback);
+                        .insert(path.clone(), req.clone());
                 }
             }
         }
