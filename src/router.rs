@@ -5,6 +5,7 @@ use hyper::Method;
 
 use super::endpoint::Endpoint;
 
+/// Default http error messages
 static ERROR_MESSAGES: phf::Map<u16, &'static str> = phf_map! {
     100u16 => "Continue",
     101u16 => "Switching protocols",
@@ -75,6 +76,34 @@ static ERROR_MESSAGES: phf::Map<u16, &'static str> = phf_map! {
     511u16 => "Network Authentication Required",
 };
 
+/// Construct a router given a list of routes
+///
+/// # Example
+///
+/// Assume that the following method is in both examples
+/// ```
+/// #[get("/")]
+/// fn home() -> Result<&'static str> {
+///     Ok("Hello, world!")
+/// }
+/// ```
+///
+/// `routes!` can be used like the `vec!` macro
+/// ```
+/// use launchpad::prelude::*;
+///
+/// let router = routes![home]
+/// ```
+///
+/// If you want to specify the `route/uri` for the endpoint in the macro you can
+/// use it similar to a map macro.
+/// ```
+/// use launchpad::prelude::*;
+///
+/// let router = routes!{
+///     "/": home
+/// }
+/// ```
 #[macro_export]
 macro_rules! routes {
     { $($path: literal => $endpoint: ident),* $(,)?} => {
@@ -84,7 +113,7 @@ macro_rules! routes {
                     $path.to_string(),
                     std::sync::Arc::new($endpoint(std::sync::Mutex::new($crate::state::State::default())))
                 ),
-            ),*
+            )*
         ])
     };
     [ $($endpoint: ident),* $(,)?] => {
@@ -100,14 +129,17 @@ macro_rules! routes {
     }
 }
 
+/// A constructed and initialized route that is linked to an endpoint
 #[derive(Debug)]
 pub struct Route(String, Arc<dyn Endpoint>);
 
 impl Route {
+    /// Create a new route give a path and an endpoint
     pub fn new(path: String, endpoint: Arc<dyn Endpoint>) -> Self {
         Route(path, endpoint)
     }
 
+    /// Create a new route with only an endpoint
     pub fn from_endpoint(value: Arc<dyn Endpoint>) -> Self {
         Route::new(value.path().clone(), value)
     }
@@ -127,7 +159,7 @@ impl Route {
 
 impl Clone for Route {
     fn clone(&self) -> Self {
-       Route(self.0.clone(), self.1.clone()) 
+        Route(self.0.clone(), self.1.clone())
     }
 
     fn clone_from(&mut self, source: &Self) {
@@ -136,8 +168,26 @@ impl Clone for Route {
     }
 }
 
-/// Endpoint => handler relationship
-/// where handler has certain request methods it can run with
+/// A mapping of uri to endpoints and errors to error handlers
+///
+/// Currently it is mapped in this way that the endpoint is shared across
+/// the different request methods. Soon it will be updated to filter by method
+/// then by best match path. This will cause more lookup time and cost but should
+/// future proof the router to handle complex features like getting props/params from
+/// the uri and parsing Forms, etc...
+///
+/// ```plaintext
+/// GET:
+///     "/" -> home
+/// POST:
+///     "/" -> home
+/// ```
+///
+/// to
+///
+/// ```plaintext
+/// "/" -> home
+/// ```
 #[derive(Debug, Clone)]
 pub struct Router {
     routes: HashMap<Method, HashMap<String, Route>>,
@@ -155,6 +205,7 @@ impl<const SIZE: usize> From<[Route; SIZE]> for Router {
 }
 
 impl Router {
+    /// Create a new blank router
     pub fn new() -> Self {
         Router {
             routes: HashMap::new(),
@@ -162,20 +213,16 @@ impl Router {
         }
     }
 
-    pub fn get_route<S: Display>(
-        &self,
-        method: Method,
-        path: S,
-    ) -> Option<&Route> {
+    /// Get an endpoint that best matches the request
+    pub fn get_route<S: Display>(&self, method: Method, path: S) -> Option<&Route> {
         let path = path.to_string();
         match self.routes.get(&method) {
-            Some(bucket) => {
-                bucket.get(&path)
-            },
+            Some(bucket) => bucket.get(&path),
             _ => None,
         }
     }
 
+    /// Get an error message
     pub fn get_error(&self, code: u16) -> String {
         match self.errors.get(&code) {
             Some(callback) => callback(),
@@ -193,6 +240,7 @@ impl Router {
         }
     }
 
+    /// Set an error handler
     pub fn set_error(&mut self, code: u16, callback: fn() -> String) {
         self.errors.insert(code, callback);
     }

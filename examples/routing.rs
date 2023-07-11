@@ -1,23 +1,24 @@
-extern crate web;
+extern crate launchpad;
 
-use web::{prelude::*, Server, Router, Response};
+use launchpad::{prelude::*, Server};
 
 #[tokio::main]
 async fn main() {
     Server::new(([127, 0, 0, 1], 3000))
         .router(routes! {
-            ["/": get, post] => message,
-            ["/hello": get] => hello,
+            "/" => message,
+            "/hello" => hello
         })
         .serve()
         .await;
 }
 
-fn message(_cx: Option<String>) -> Response {
+#[get]
+fn message() -> Result<&'static str> {
     // PERF: Support for return type of Responder.
     // templating with HandleBars and Tera
     // Macro based `rsx` / templating
-    r#"<html lang="en">
+    Ok(r#"<html lang="en">
         <head>
             <title>Home</title>
         </head>
@@ -29,10 +30,11 @@ fn message(_cx: Option<String>) -> Response {
                 <li>LaunchPad</li>
             </ul>
         </body>
-    </html>"#.into()
+    </html>"#)
 }
 
-fn hello(_cx: Option<String>) -> Response {
+#[get]
+fn hello() -> Result<&'static str> {
     // "Hello".into()
-    500.into()
+    Err(500)
 }

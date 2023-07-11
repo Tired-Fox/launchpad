@@ -1,19 +1,36 @@
 extern crate proc_macro;
 
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::TokenStream as TokenStream2;
 
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
     bracketed, parse::Parse, parse_macro_input, punctuated::Punctuated, FnArg, GenericArgument,
-    Ident, ItemFn, LitStr, PatType, PathArguments, Token, Type, Result,
+    Ident, ItemFn, LitStr, PatType, PathArguments, Result, Token, Type,
 };
 
 macro_rules! route_expand {
     ($name: ident, $method: ident) => {
+        /// A request handler. Can optionally be given a uri or it can be provided
+        /// in the `routes!` macro. This method only handles a single request method
+        /// which is the same as the macro name.
+        ///
+        /// # Example
+        /// ```
+        /// use launchpad::prelude::*;
+        ///
+        /// #[get("/")]
+        /// fn index() -> Result<&'static str> {
+        ///     Ok("Hello World")
+        /// }
+        ///
+        /// #[post]
+        /// fn data() -> Result<&'static str> {
+        ///     Ok("Home")
+        /// }
+        /// ```
         #[proc_macro_attribute]
         pub fn $name(args: TokenStream, function: TokenStream) -> TokenStream {
-            assert!(!args.is_empty(), "requires a path argument");
             let func: ItemFn = parse_macro_input!(function);
             let mut args: Args = parse_macro_input!(args as Args);
             args.methods.push(stringify!($method).to_string());
@@ -23,9 +40,28 @@ macro_rules! route_expand {
     };
 }
 
+/// Base request macro. It accepts a path and a list of request methods.
+/// All request methods are valid for the endpoint and the path is optional.
+///
+/// # Example
+/// ```
+/// use launchpad::prelude::*;
+///
+/// #[request]
+/// fn index() -> Result<&'static str> {}
+///
+/// #[request("/")]
+/// fn data() -> Result<&'static str> {}
+///
+/// #[request("/", methods=[get, post, delete])]
+/// fn delete() -> Result<&'static str> {}
+///
+/// #[request(methods=[get, post, delete])]
+/// fn home() -> Result<&'static str> {}
+/// ```
 #[proc_macro_attribute]
 pub fn request(args: TokenStream, function: TokenStream) -> TokenStream {
-    assert!(!args.is_empty(), "requires a path and methods arguments");
+    // assert!(!args.is_empty(), "requires at least a path argument");
     let func: ItemFn = parse_macro_input!(function);
     let args: Args = parse_macro_input!(args as Args);
 
@@ -33,16 +69,28 @@ pub fn request(args: TokenStream, function: TokenStream) -> TokenStream {
 }
 
 struct Args {
-    path: LitStr,
+    path: Option<LitStr>,
     methods: Vec<String>,
+}
+
+impl Default for Args {
+    fn default() -> Self {
+        Self {
+            path: None,
+            methods: vec!["GET".to_string()],
+        }
+    }
 }
 
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let path: LitStr = input.parse()?;
-        let _: Result<Token![,]> = input.parse();
+        let mut path = None;
+        if input.peek(LitStr) {
+            path = Some(input.parse::<LitStr>()?);
+            let _: Result<Token![,]> = input.parse();
+        }
 
-        let mut methods = Punctuated::new();
+        let mut methods = Vec::new();
         if input.peek(Ident) {
             let next: Ident = input.parse()?;
             if next != "methods" {
@@ -53,19 +101,18 @@ impl Parse for Args {
             let list;
             bracketed!(list in input);
 
-            methods = Punctuated::<Ident, Token![,]>::parse_terminated(&list)?;
+            let req_methods = Punctuated::<Ident, Token![,]>::parse_terminated(&list)?;
+            methods = req_methods
+                .into_iter()
+                .map(|m| m.to_string().to_uppercase())
+                .collect()
         }
 
-        Ok(Args {
-            path,
-            methods: methods
-                .iter()
-                .map(|m| m.to_string().to_uppercase())
-                .collect(),
-        })
+        Ok(Args { path, methods })
     }
 }
 
+/// Parse the function arguments and return a vector of types
 fn parse_props(function: ItemFn) -> Vec<Type> {
     function
         .sig
@@ -77,6 +124,8 @@ fn parse_props(function: ItemFn) -> Vec<Type> {
         })
         .collect::<Vec<Type>>()
 }
+
+/// Check if the function has a state struct
 fn has_state(props: &Vec<Type>) -> (bool, bool, Option<Type>) {
     for prop in props.iter() {
         if let Type::Reference(r) = prop {
@@ -112,8 +161,16 @@ fn has_state(props: &Vec<Type>) -> (bool, bool, Option<Type>) {
     (false, false, None)
 }
 
+/// Build the endpoint struct
 fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
-    let path = args.path.value();
+    let path = match args.path {
+        Some(p) => {
+            let p = p.value();
+            quote!(String::from(#p))
+        }
+        None => quote!(panic!("No path provided in macro. Please specify a path.")),
+    };
+
     let name = function.sig.ident.clone();
     let props = parse_props(function.clone());
 
@@ -124,7 +181,11 @@ fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
         .collect::<Vec<String>>()
         .join(", ");
 
-    let methods: TokenStream2 = format!("vec![{}]", methods).parse::<TokenStream>().unwrap().into();
+    let methods: TokenStream2 = format!("vec![{}]", methods)
+        .parse::<TokenStream>()
+        .unwrap()
+        .into();
+
     let (state, state_mutable, elem) = has_state(&props);
     let (stype, state) = match state {
         true => {
@@ -172,7 +233,7 @@ fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
              }
 
              fn path(&self) -> String {
-                 String::from(#path)
+                 #path
              }
 
              fn call(&self) -> launchpad::Response {
@@ -185,6 +246,7 @@ fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
     .into()
 }
 
+// All specific request method varients
 route_expand!(get, GET);
 route_expand!(post, POST);
 route_expand!(delete, DELETE);

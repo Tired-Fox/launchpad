@@ -56,35 +56,6 @@ fn data() -> Result<&'static str> {
     Ok("Home")
 }
 
-// #[derive(Debug)]
-// struct World(Mutex<State<WorldState>>);
-// impl Endpoint for World {
-//     fn methods(&self) -> Vec<Method> {
-//         vec![Method::GET]
-//     }
-
-//     fn path(&self) -> String {
-//         String::from("/")
-//     }
-
-//     fn call(&self) -> Response {
-//         fn endpoint_call(state: &mut State<WorldState>) -> Result<String> {
-//             state.inner_mut().count += 1;
-//             if state.inner().name == "".to_string() {
-//                 state.inner_mut().name = "Zachary".to_string();
-//             }
-
-//             Ok(format!("Hello World, and {:?}: {} times", state.inner().name, state.inner().count))
-//         }
-
-//         let mut lock_state = self.0.lock().unwrap();
-//         match endpoint_call(&mut *lock_state) {
-//             Ok(data) => Response::from(data),
-//             Err(code) => Response::from(code),
-//         }
-//     }
-// }
-
 // macro_rules! rsx {
 //     ($($markup:tt)*) => {
 //         Element

@@ -14,14 +14,22 @@ use tokio::{
 };
 
 use super::{
-    endpoint::Context,
     router::{Route, Router},
     Response,
 };
 
-pub struct Server {
-    addr: SocketAddr,
-    router: Arc<Mutex<Router>>,
+/// Commands sent through channel to router
+#[derive(Debug)]
+enum Command {
+    Get {
+        method: Method,
+        path: String,
+        response: oneshot::Sender<Option<Route>>,
+    },
+    Error {
+        code: u16,
+        response: oneshot::Sender<String>,
+    },
 }
 
 macro_rules! response {
@@ -45,20 +53,56 @@ macro_rules! error {
     };
 }
 
-#[derive(Debug)]
-enum Command {
-    Get {
-        method: Method,
-        path: String,
-        response: oneshot::Sender<Option<Route>>,
-    },
-    Error {
-        code: u16,
-        response: oneshot::Sender<String>,
-    },
+/// Async server object that handles requests
+///
+/// The server will communicate with a router thread to serve requests
+///
+/// # Example
+/// ```
+/// use launchpad::{prelude::*, Server};
+///
+/// fn main() {
+///     Server::new(([127, 0, 0, 1], 3000))
+///         .router(routes![home])
+///         .serve()
+///         .await;
+/// }
+///
+/// #[get("/")]
+/// fn home() -> Result<&'static str> {
+///     Ok("Hello, world!")
+/// }
+/// ```
+pub struct Server {
+    addr: SocketAddr,
+    router: Arc<Mutex<Router>>,
 }
 
 impl Server {
+    /// Create a new server with a given address
+    ///
+    /// The method can take anything that can be converted into a SocketAddr
+    ///
+    /// # Example
+    /// ```rust
+    /// use launchpad::{prelude::*, Server};
+    ///
+    /// fn main() {
+    ///     Server::new(([127, 0, 0, 1], 3000))
+    ///         .serve()
+    ///         .await;
+    /// }
+    /// ```
+    ///
+    /// ```rust
+    /// use launchpad::{prelude::*, Server};
+    ///
+    /// fn main() {
+    ///     Server::new("127.0.0.1:3000")
+    ///         .serve()
+    ///         .await;
+    /// }
+    /// ```
     pub fn new(addr: impl Into<SocketAddr>) -> Self {
         Server {
             addr: addr.into(),
@@ -66,6 +110,18 @@ impl Server {
         }
     }
 
+    /// Starts the server and handles requests
+    ///
+    /// # Example
+    /// ```rust
+    /// use launchpad::{prelude::*, Server};
+    ///
+    /// fn main() {
+    ///     Server::new("127.0.0.1:3000")
+    ///         .serve()
+    ///         .await;
+    /// }
+    /// ```
     pub async fn serve(&self) {
         let listener = TcpListener::bind(self.addr).await.unwrap();
         let (tx, mut rx) = mpsc::channel::<Command>(32);
@@ -109,6 +165,10 @@ impl Server {
         }
     }
 
+    /// Set the router for the server
+    ///
+    /// The router object holds all information for url to endpoint mappings
+    /// along with custom error responses.
     pub fn router(self, router: Router) -> Self {
         Server {
             router: Arc::new(Mutex::new(router)),
@@ -117,6 +177,7 @@ impl Server {
     }
 }
 
+/// Core request handler
 async fn handler(
     req: hyper::Request<hyper::body::Incoming>,
     router: Sender<Command>,
@@ -143,9 +204,7 @@ async fn handler(
             match endpoint {
                 // PERF: Pass uri data to callback              \/
                 Some(endpoint) => match endpoint.endpoint().call() {
-                    Response::Success(data) => {
-                        hyper::Response::new(Full::new(data))
-                    },
+                    Response::Success(data) => hyper::Response::new(Full::new(data)),
                     Response::Error(code) => {
                         let (resp_tx, resp_rx) = oneshot::channel();
                         router
