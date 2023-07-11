@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, collections::HashMap};
 
 pub use hyper::Method;
 
@@ -57,7 +57,10 @@ pub trait Responder {
 /// ```
 /// ```
 pub trait Endpoint: Debug + Sync + Send {
-    fn call(&self) -> Response;
+    fn call(&self, request: hyper::Request<hyper::body::Incoming>) -> Response;
     fn path(&self) -> String;
     fn methods(&self) -> Vec<Method>;
+    fn props(&self, uri: String) -> HashMap<String, launchpad_uri::Prop> {
+       launchpad_uri::props(&uri, &self.path())
+    }
 }

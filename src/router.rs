@@ -190,9 +190,22 @@ impl Clone for Route {
 /// ```
 #[derive(Debug, Clone)]
 pub struct Router {
-    routes: HashMap<Method, HashMap<String, Route>>,
+    routes: HashMap<Method, Vec<Route>>,
     errors: HashMap<u16, fn() -> String>,
 }
+
+// <HEAP> [hello("/api/name/<first>/<last>"), world("/api/<...path>/help")] <- endpoints
+//
+// <routes: HashMap>
+//  hyper::Method::GET <- [*hello, *world]
+//  hyper::Method::POST <- [*world]
+//
+// GET "/api/name/<first>/<last>"
+//  - routes.get(hyper::Method::GET) <- [*hello, *world]
+//  - [*hello, *world].iter() <- Compare uri for closest match first
+//      - Exact same Length
+//      - Matching literals
+//      - Ranked from best match to worst match
 
 impl<const SIZE: usize> From<[Route; SIZE]> for Router {
     fn from(value: [Route; SIZE]) -> Self {
@@ -215,9 +228,13 @@ impl Router {
 
     /// Get an endpoint that best matches the request
     pub fn get_route<S: Display>(&self, method: Method, path: S) -> Option<&Route> {
+        // TODO: use new uri matching
         let path = path.to_string();
         match self.routes.get(&method) {
-            Some(bucket) => bucket.get(&path),
+            Some(bucket) => {
+                let result = launchpad_uri::find(&path, &bucket, |s| s.path().clone());
+                result
+            },
             _ => None,
         }
     }
@@ -248,23 +265,24 @@ impl Router {
     /// Map an endpoint given the request type.
     ///
     /// If the mapping already exists it will be overridden
-    pub fn set_route<S: Display>(&mut self, path: S, req: Route) {
+    pub fn set_route<S: Display>(&mut self, path: S, mut req: Route) {
         let mut path = path.to_string();
         if path.ends_with("/") {
             path.pop();
         }
+        req.0 = path;
 
         for method in req.endpoint().methods() {
             match self.routes.get_mut(&method) {
                 Some(bucket) => {
-                    bucket.insert(path.clone(), req.clone());
+                    bucket.push(req.clone());
                 }
                 None => {
-                    self.routes.insert(method.clone(), HashMap::new());
+                    self.routes.insert(method.clone(), Vec::new());
                     self.routes
                         .get_mut(&method)
                         .unwrap()
-                        .insert(path.clone(), req.clone());
+                        .push(req.clone());
                 }
             }
         }

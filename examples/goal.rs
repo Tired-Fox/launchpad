@@ -5,7 +5,7 @@ use launchpad::{prelude::*, Server, State};
 #[tokio::main]
 async fn main() {
     Server::new(([127, 0, 0, 1], 3000))
-        .router(routes![world, home])
+        .router(routes![world, home, data])
         .serve()
         .await;
 }
@@ -51,9 +51,9 @@ fn home() -> Result<&'static str> {
     </html>"#)
 }
 
-#[post("/")]
-fn data() -> Result<&'static str> {
-    Ok("Home")
+#[get("/api/name/<firstname>/<lastname>/")]
+fn data(firstname: String, lastname: String) -> Result<String> {
+    Ok(format!("Hello {} {}", firstname, lastname))
 }
 
 // macro_rules! rsx {

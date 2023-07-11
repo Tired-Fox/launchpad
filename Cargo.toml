@@ -10,7 +10,8 @@ bytes = "1.4.0"
 tokio = { version = "1.29.1", features = ["full"] }
 hyper = { version = "1.0.0-rc.3", features=["full"]}
 http-body-util = "0.1.0-rc.2"
-macros = { path = "macros" }
+launchpad-macros = { path = "launchpad_macros" }
+launchpad-uri = { path = "launchpad_uri" }
 serde_json = "1.0.100"
 serde = "1.0.167"
 phf = { version = "0.11.2", features = ["macros", "phf_macros"] }

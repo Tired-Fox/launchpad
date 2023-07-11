@@ -194,7 +194,7 @@ async fn handler(
             router
                 .send(Command::Get {
                     method: req.method().clone(),
-                    path,
+                    path: path.clone(),
                     response: resp_tx,
                 })
                 .await
@@ -202,8 +202,7 @@ async fn handler(
 
             let endpoint = resp_rx.await.unwrap();
             match endpoint {
-                // PERF: Pass uri data to callback              \/
-                Some(endpoint) => match endpoint.endpoint().call() {
+                Some(endpoint) => match endpoint.endpoint().call(req) {
                     Response::Success(data) => hyper::Response::new(Full::new(data)),
                     Response::Error(code) => {
                         let (resp_tx, resp_rx) = oneshot::channel();

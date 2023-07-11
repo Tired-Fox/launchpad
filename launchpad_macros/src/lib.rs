@@ -1,12 +1,13 @@
 extern crate proc_macro;
 
+
 use proc_macro2::TokenStream as TokenStream2;
 
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
     bracketed, parse::Parse, parse_macro_input, punctuated::Punctuated, FnArg, GenericArgument,
-    Ident, ItemFn, LitStr, PatType, PathArguments, Result, Token, Type,
+    Ident, ItemFn, LitStr, Pat, PatType, PathArguments, Result, Token, Type,
 };
 
 macro_rules! route_expand {
@@ -113,66 +114,89 @@ impl Parse for Args {
 }
 
 /// Parse the function arguments and return a vector of types
-fn parse_props(function: ItemFn) -> Vec<Type> {
+fn parse_props(function: ItemFn) -> Vec<(String, Type)> {
     function
         .sig
         .inputs
         .into_iter()
         .filter_map(|arg| match arg {
-            FnArg::Typed(PatType { ty, .. }) => Some(*ty),
+            FnArg::Typed(PatType { ty, pat, .. }) => {
+                let name = match *pat {
+                    Pat::Ident(pat_ident) => pat_ident.ident.to_string(),
+                    _ => {
+                        panic!("Expected named argument")
+                    }
+                };
+                Some((name, *ty))
+            }
             FnArg::Receiver(_) => None,
         })
-        .collect::<Vec<Type>>()
+        .collect::<Vec<(String, Type)>>()
 }
 
-/// Check if the function has a state struct
-fn has_state(props: &Vec<Type>) -> (bool, bool, Option<Type>) {
-    for prop in props.iter() {
-        if let Type::Reference(r) = prop {
-            if let Type::Path(path) = &*r.elem {
-                if let Some(seg) = path.path.segments.last() {
-                    let elem = match &seg.arguments {
-                        PathArguments::AngleBracketed(brackets) => {
-                            if brackets.args.len() == 1 {
-                                match &brackets.args[0] {
-                                    GenericArgument::Type(t) => t.clone(),
-                                    _ => panic!("Expected state type to be a type"),
-                                }
-                            } else {
-                                panic!("Expected one state type")
+fn get_state(prop: Type) -> Option<(bool, Type)> {
+    if let Type::Reference(r) = &prop {
+        if let Type::Path(path) = &*r.elem {
+            if let Some(seg) = path.path.segments.last() {
+                let elem = match &seg.arguments {
+                    PathArguments::AngleBracketed(brackets) => {
+                        if brackets.args.len() == 1 {
+                            match &brackets.args[0] {
+                                GenericArgument::Type(t) => t.clone(),
+                                _ => panic!("Expected state type to be a type"),
                             }
+                        } else {
+                            panic!("Expected one state type")
                         }
-                        _ => panic!("Expected State generic type"),
-                    };
-                    if seg.ident.to_string() == "State".to_string() {
-                        return (
-                            true,
-                            match r.mutability {
-                                Some(_) => true,
-                                None => false,
-                            },
-                            Some(elem),
-                        );
                     }
+                    _ => panic!("Expected State generic type"),
+                };
+                if seg.ident.to_string() == "State".to_string() {
+                    return Some((
+                        match r.mutability {
+                            Some(_) => true,
+                            None => false,
+                        },
+                        elem,
+                    ));
                 }
             }
         }
     }
-    (false, false, None)
+    None
+}
+/// Check if the function has a state struct
+fn has_state(props: &mut Vec<(String, Type)>) -> Option<(bool, Type)> {
+    let results = props
+        .iter()
+        .map(|s| get_state(s.1.clone()))
+        .collect::<Vec<Option<(bool, Type)>>>();
+    let pos = results.iter().position(|s| matches!(s, Some(_)));
+
+    match pos {
+        Some(index) => {
+            props.remove(index);
+            results[index].clone()
+        }
+        _ => None,
+    }
 }
 
 /// Build the endpoint struct
 fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
-    let path = match args.path {
+    let (_uri, path) = match args.path {
         Some(p) => {
-            let p = p.value();
-            quote!(String::from(#p))
+            let p = p.value().clone();
+            (p.clone(), quote!(String::from(#p)))
         }
-        None => quote!(panic!("No path provided in macro. Please specify a path.")),
+        None => (
+            String::new(),
+            quote!(panic!("No path provided in macro. Please specify a path.")),
+        ),
     };
 
     let name = function.sig.ident.clone();
-    let props = parse_props(function.clone());
+    let mut props = parse_props(function.clone());
 
     let methods = args
         .methods
@@ -186,40 +210,51 @@ fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
         .unwrap()
         .into();
 
-    let (state, state_mutable, elem) = has_state(&props);
+    let state = has_state(&mut props);
+
     let (stype, state) = match state {
-        true => {
-            let elem = elem.unwrap();
-            (
-                quote!(#elem),
-                match state_mutable {
-                    true => quote!(
-                        let mut __lock_state = self.0.lock().unwrap();
-                        match #name(&mut *__lock_state) {
-                            Ok(__data) => launchpad::Response::from(__data),
-                            Err(__code) => launchpad::Response::from(__code),
-                        }
-                    ),
-                    _ => quote!(
-                        let mut __lock_state = self.0.lock().unwrap();
-                        match #name(&*__lock_state) {
-                            Ok(__data) => launchpad::Response::from(__data),
-                            Err(__code) => launchpad::Response::from(__code),
-                        }
-                    ),
-                },
-            )
-        }
-        _ => (
-            quote!(launchpad::state::Empty),
-            quote!(
-                match #name() {
-                    Ok(__data) => launchpad::Response::from(__data),
-                    Err(__code) => launchpad::Response::from(__code),
-                }
-            ),
+        Some((mutable, elem)) => (
+            quote!(#elem),
+            match mutable {
+                true => quote!(&mut *__lock_state),
+                _ => quote!(&*__lock_state),
+            },
         ),
+        _ => (quote!(launchpad::state::Empty), quote!()),
     };
+
+    let props = match props.len() > 0 {
+        true => {
+            let p: TokenStream2 = props
+                .iter()
+                .map(|f| format!("__props.get(\"{}\").unwrap().into()", f.0))
+                .collect::<Vec<String>>()
+                .join(", ")
+                .parse::<TokenStream>()
+                .unwrap()
+                .into();
+
+            if state.is_empty() {
+                p
+            } else {
+                quote!(#state, #p)
+            }
+        }
+        false => state,
+    };
+
+    let call = quote!(
+        let mut __lock_state = self.0.lock().unwrap();
+        let __props = launchpad_uri::props(&request.uri().path(), &self.path());
+
+        match #name(#props) {
+            Ok(__data) => launchpad::Response::from(__data),
+            Err(__code) => launchpad::Response::from(__code),
+        }
+    );
+
+    // TODO: Parse uri props and compare with method props
+    // Ensure the types are the same
 
     quote! {
          #[derive(Debug)]
@@ -236,10 +271,10 @@ fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
                  #path
              }
 
-             fn call(&self) -> launchpad::Response {
+             fn call(&self, request: hyper::Request<hyper::body::Incoming>) -> launchpad::Response {
                  #function
 
-                 #state
+                 #call
              }
          }
     }

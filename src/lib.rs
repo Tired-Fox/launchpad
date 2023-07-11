@@ -9,7 +9,6 @@ pub use router::Router;
 pub use server::Server;
 pub use state::State;
 
-use std::fmt::Display;
 
 use bytes::Bytes;
 use endpoint::Responder;
@@ -30,15 +29,6 @@ impl<T: Responder> From<T> for Response {
 impl From<u16> for Response {
     fn from(value: u16) -> Self {
         Response::Error(value)
-    }
-}
-
-impl Response {
-    fn success<RES>(data: RES) -> Self
-    where
-        RES: Display,
-    {
-        Response::Success(bytes::Bytes::from(data.to_string()))
     }
 }
 
