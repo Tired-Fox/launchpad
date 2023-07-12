@@ -18,14 +18,14 @@ struct WorldState {
 #[get("/api/name/<firstname>/<lastname>/")]
 fn data(
     state: &mut State<WorldState>,
-    // data: Data<HomeData>,
+    // _data: Data<HomeData>,
     firstname: String,
     lastname: String,
 ) -> Result<String> {
 
     state.inner_mut().count += 1;
-    // Ok(format!("Hello {} {} ({}): {:?}", firstname, lastname, state.inner().count, data.get_ref()));
-    Error::code(500)
+    Ok(format!("Hello {} {} ({})", firstname, lastname, state.inner().count))
+    // Error::new(500, "Testing user errors")
 }
 
 #[derive(Default, Debug)]

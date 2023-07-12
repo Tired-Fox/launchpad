@@ -28,8 +28,8 @@ impl<ToString: Display> From<(u16, ToString)> for Error {
 }
 
 impl Error {
-    pub fn new<T, ToString: Display>(code: u16, message: Option<ToString>) -> std::result::Result<T, Error> {
-        Err(Error(code, message.map(|m| m.to_string())))
+    pub fn new<T, ToString: Display>(code: u16, message: ToString) -> std::result::Result<T, Error> {
+        Err(Error(code, Some(message.to_string())))
     }
 
     pub fn code<T>(code: u16) -> std::result::Result<T, Error> {
