@@ -1,25 +1,33 @@
-macro_rules! router {
-    [$($endpoint: ident),*] => {
-        println!("[{}]", vec![$($endpoint.to_string(),)*].join(", "))
-    };
-    {$($path: literal => $endpoint: ident),*} => {
-        println!(
-            "[{}]",
-            vec![$(($path, $endpoint.to_string()),)*]
-                .iter()
-                .map(|t| format!("{} => {}", t.0, t.1))
-                .collect::<Vec<String>>()
-                .join(", ")
-        )
-    }
+extern crate launchpad;
+
+use launchpad::{prelude::*, Server, State, Data};
+
+#[tokio::main]
+async fn main() {
+    Server::new(([127, 0, 0, 1], 3000))
+        .router(routes![data])
+        .serve()
+        .await;
 }
 
-fn main() {
-    let here = "today";
-    let something = "something";
+#[derive(Debug, Default)]
+struct WorldState {
+    pub count: u16,
+}
 
-    router![here, something];
-    router!{
-        "Something" => here
-    };
+#[get("/api/name/<firstname>/<lastname>/")]
+fn data(
+    state: &mut State<WorldState>,
+    data: Data<HomeData>,
+    firstname: String,
+    lastname: String,
+) -> Result<String> {
+
+    state.inner_mut().count += 1;
+    Ok(format!("Hello {} {} ({}): {:?}", firstname, lastname, state.inner().count, data.get_ref()))
+}
+
+#[derive(Default, Debug)]
+struct HomeData {
+    name: String
 }

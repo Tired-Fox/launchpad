@@ -28,28 +28,79 @@ enum Command {
     },
     Error {
         code: u16,
+        reason: String,
         response: oneshot::Sender<String>,
     },
 }
 
+fn format_body(body: String) -> String {
+    let re = regex::Regex::new("(?i)<meta +charset=\"UTF-8\" *>").unwrap();
+    let response = match re.find(body.as_str()) {
+        None => format!("<head><meta charset=\"UTF-8\"></head>\n{}", body),
+        Some(_) => body,
+    };
+    response
+}
+
+fn format_request_debug(
+    message: String,
+    request: &hyper::Request<hyper::body::Incoming>,
+) -> String {
+    format!(
+        r#"<pre>
+{}
+    <em>Request: <strong>{} → '{}</strong>'</em>
+    <em>Body: <strong>{:?}</strong></em>
+</pre>"#,
+        message,
+        request.method(),
+        request.uri(),
+        request.body()
+    )
+}
+
 macro_rules! response {
     ($data: expr) => {
-        hyper::Response::new(http_body_util::Full::new(bytes::Bytes::from($data)))
+        hyper::Response::new(http_body_util::Full::new(bytes::Bytes::from(format_body(
+            $data,
+        ))))
     };
 }
 
+fn build_error(code: u16, msg: String, reason: String) -> hyper::Response<Full<Bytes>> {
+    let mut response = hyper::Response::builder().status(code);
+    match code {
+        301 | 308 | 302 | 303 | 307 => {
+            if reason == String::new() {
+                panic!("Redirect responses require an error reason that is the Location")
+            }
+            response = response
+                .header("LaunchPad-Reason", "Redirect")
+                .header("Location", reason);
+        }
+        _ => {
+            response = response.header("LaunchPad-Reason", reason);
+        }
+    }
+
+    response
+        .body(http_body_util::Full::new(bytes::Bytes::from(
+            match msg.len() == 0 {
+                false => format_body(msg),
+                _ => msg,
+            },
+        )))
+        .unwrap()
+}
 macro_rules! error {
-    ($code: expr, $msg: expr) => {
-        hyper::Response::builder()
-            .status($code)
-            .body(http_body_util::Full::new(bytes::Bytes::from($msg)))
-            .unwrap()
+    ($code: expr, $reason: expr, $msg: expr) => {
+        build_error($code, $msg, $reason)
+    };
+    ($code: expr, $reason: expr) => {
+        build_error($code, String::new(), $reason)
     };
     ($code: expr) => {
-        hyper::Response::builder()
-            .status($code)
-            .body(http_body_util::Full::new(bytes::Bytes::new()))
-            .unwrap()
+        build_error($code, String::new(), String::new())
     };
 }
 
@@ -142,9 +193,13 @@ impl Server {
                             .send(router.get_route(method, path).map(|f| f.clone()))
                             .unwrap();
                     }
-                    Error { code, response } => {
+                    Error {
+                        code,
+                        reason,
+                        response,
+                    } => {
                         let router = router.lock().unwrap();
-                        response.send(router.get_error(code)).unwrap()
+                        response.send(router.get_error(code, reason)).unwrap()
                     }
                 }
             }
@@ -202,19 +257,27 @@ async fn handler(
 
             let endpoint = resp_rx.await.unwrap();
             match endpoint {
-                Some(endpoint) => match endpoint.endpoint().call(req) {
+                Some(endpoint) => match endpoint.endpoint().call(&req) {
                     Response::Success(data) => hyper::Response::new(Full::new(data)),
-                    Response::Error(code) => {
+                    Response::Error(code, message) => {
                         let (resp_tx, resp_rx) = oneshot::channel();
                         router
                             .send(Command::Error {
                                 code: code.clone(),
+                                reason: format_request_debug(match &message {
+                                    Some(msg) => msg.clone(),
+                                    _ => String::new(),
+                                }, &req),
                                 response: resp_tx,
                             })
                             .await
                             .unwrap();
-                        let message = resp_rx.await.unwrap();
-                        error!(code, message)
+
+                        let body = resp_rx.await.unwrap();
+                        match message {
+                            Some(msg) => error!(code, msg, body),
+                            _ => error!(code, "".to_string(), body),
+                        }
                     }
                 },
                 _ => {
@@ -222,12 +285,19 @@ async fn handler(
                     router
                         .send(Command::Error {
                             code: 404,
+                            reason: format_request_debug(
+                                format!(
+                                    "<span class=\"path\"><strong>/{}</strong></span> not found in router",
+                                    path_buff.to_string_lossy()
+                                ),
+                                &req
+                            ),
                             response: resp_tx,
                         })
                         .await
                         .unwrap();
                     let message = resp_rx.await.unwrap();
-                    response!(message)
+                    error!(404, "path not found in router".to_string(), message)
                 }
             }
         }
@@ -238,14 +308,22 @@ async fn handler(
                     router
                         .send(Command::Error {
                             code: 404,
+                            reason: format_request_debug(
+                                format!("Could not find file {:?}", path_buff.to_string_lossy()),
+                                &req,
+                            ),
                             response: resp_tx,
                         })
                         .await
                         .unwrap();
                     let message = resp_rx.await.unwrap();
-                    response!(message)
+                    error!(
+                        404,
+                        format!("File not found: {}", path_buff.to_string_lossy()),
+                        message
+                    )
                 } else {
-                    error!(404)
+                    error!(404, "Path not in router".to_string())
                 }
             } else {
                 response!(fs::read_to_string(path).expect("Could not read from file"))

@@ -17,6 +17,20 @@
 
 Rust based web design :smile:
 
+```rust
+#[get("/")]
+fn home() -> Result<&'static str> {
+  Ok("Hello, world!")
+}
+```
+
+```rust
+#[post("/")]
+fn home(#[data] login: &str, #[data] age: i32) -> Result<&'static str> {
+  Ok("Hello, world!")
+}
+```
+
 <!-- Footer Badges --!>
 
 <br>

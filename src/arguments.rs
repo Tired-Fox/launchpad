@@ -1,4 +1,5 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
+use crate::Response;
 
 /// A state/context manager used for individual endpoints
 ///
@@ -83,3 +84,15 @@ impl<T: Default + Debug> Default for State<T> {
 /// Placeholder state context
 #[derive(Debug, Default)]
 pub struct Empty;
+
+pub struct Data<T: Default>(T);
+impl<T: Default> Data<T> {
+    pub fn parse(_request: &hyper::Request<hyper::body::Incoming>) -> Result<Data<T>, (u16, String)> {
+        // Ok(Data(T::default()));
+        Err((500, "Request data parsing is not implemented".to_string()))
+    }
+
+    pub fn get_ref(&self) -> &T {
+        &self.0
+    }
+}

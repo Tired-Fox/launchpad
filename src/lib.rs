@@ -3,11 +3,13 @@ pub mod prelude;
 
 pub mod router;
 pub mod server;
-pub mod state;
+pub mod arguments;
+
+use std::fmt::Display;
 
 pub use router::Router;
 pub use server::Server;
-pub use state::State;
+pub use arguments::{State, Data};
 
 
 use bytes::Bytes;
@@ -17,7 +19,7 @@ pub type Result<T> = std::result::Result<T, u16>;
 
 pub enum Response {
     Success(bytes::Bytes),
-    Error(u16),
+    Error(u16, Option<String>),
 }
 
 impl<T: Responder> From<T> for Response {
@@ -26,9 +28,15 @@ impl<T: Responder> From<T> for Response {
     }
 }
 
+impl<T: Display> From<(u16, T)> for Response {
+    fn from(value: (u16, T)) -> Self {
+        Response::Error(value.0, Some(value.1.to_string()))
+    }
+}
+
 impl From<u16> for Response {
     fn from(value: u16) -> Self {
-        Response::Error(value)
+        Response::Error(value, None)
     }
 }
 

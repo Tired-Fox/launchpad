@@ -57,7 +57,7 @@ pub trait Responder {
 /// ```
 /// ```
 pub trait Endpoint: Debug + Sync + Send {
-    fn call(&self, request: hyper::Request<hyper::body::Incoming>) -> Response;
+    fn call(&self, request: &hyper::Request<hyper::body::Incoming>) -> Response;
     fn path(&self) -> String;
     fn methods(&self) -> Vec<Method>;
     fn props(&self, uri: String) -> HashMap<String, launchpad_uri::Prop> {

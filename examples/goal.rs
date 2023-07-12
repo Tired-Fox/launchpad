@@ -52,7 +52,7 @@ fn home() -> Result<&'static str> {
 }
 
 #[get("/api/name/<firstname>/<lastname>/")]
-fn data(firstname: String, lastname: String) -> Result<String> {
+fn data(firstname: &str, lastname: &str) -> Result<String> {
     Ok(format!("Hello {} {}", firstname, lastname))
 }
 
