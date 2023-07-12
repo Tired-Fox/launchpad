@@ -266,7 +266,7 @@ async fn handler(
                                 code: code.clone(),
                                 reason: format_request_debug(match &message {
                                     Some(msg) => msg.clone(),
-                                    _ => String::new(),
+                                    _ => String::from("A user defined error occured"),
                                 }, &req),
                                 response: resp_tx,
                             })

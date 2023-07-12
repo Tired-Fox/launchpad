@@ -326,7 +326,7 @@ fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
 
         match #name(#props) {
             Ok(__data) => ::launchpad::Response::from(__data),
-            Err(__code) => ::launchpad::Response::from(__code),
+            Err(__error) => ::launchpad::Response::from(::launchpad::Error::from(__error)),
         }
     );
 

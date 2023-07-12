@@ -15,7 +15,29 @@ pub use arguments::{State, Data};
 use bytes::Bytes;
 use endpoint::Responder;
 
-pub type Result<T> = std::result::Result<T, u16>;
+pub struct Error(u16, Option<String>);
+impl From<u16> for Error {
+    fn from(value: u16) -> Self {
+        Error(value, None)
+    }
+}
+impl<ToString: Display> From<(u16, ToString)> for Error {
+    fn from(value: (u16, ToString)) -> Self {
+        Error(value.0, Some(value.1.to_string()))
+    }
+}
+
+impl Error {
+    pub fn new<T, ToString: Display>(code: u16, message: Option<ToString>) -> std::result::Result<T, Error> {
+        Err(Error(code, message.map(|m| m.to_string())))
+    }
+
+    pub fn code<T>(code: u16) -> std::result::Result<T, Error> {
+        Err(Error(code, None))
+    }
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 pub enum Response {
     Success(bytes::Bytes),
@@ -28,15 +50,21 @@ impl<T: Responder> From<T> for Response {
     }
 }
 
-impl<T: Display> From<(u16, T)> for Response {
-    fn from(value: (u16, T)) -> Self {
-        Response::Error(value.0, Some(value.1.to_string()))
+impl From<Error> for Response {
+    fn from(value: Error) -> Self {
+        Response::Error(value.0, value.1)
     }
 }
 
 impl From<u16> for Response {
     fn from(value: u16) -> Self {
         Response::Error(value, None)
+    }
+}
+
+impl From<(u16, String)> for Response {
+    fn from(value: (u16, String)) -> Self {
+        Response::Error(value.0, Some(value.1))
     }
 }
 
