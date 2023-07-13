@@ -1,6 +1,6 @@
 extern crate launchpad;
 
-use launchpad::{prelude::*, Server, State, Data, Error};
+use launchpad::{prelude::*, Data, Error, Server, State};
 
 #[tokio::main]
 async fn main() {
@@ -22,13 +22,17 @@ fn data(
     firstname: String,
     lastname: String,
 ) -> Result<String> {
-
     state.inner_mut().count += 1;
-    Ok(format!("Hello {} {} ({})", firstname, lastname, state.inner().count))
+    Ok(format!(
+        "Hello {} {} ({})",
+        firstname,
+        lastname,
+        state.inner().count
+    ))
     // Error::new(500, "Testing user errors")
 }
 
 #[derive(Default, Debug)]
 struct HomeData {
-    name: String
+    name: String,
 }
