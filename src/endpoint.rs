@@ -1,6 +1,8 @@
-use std::{fmt::Debug, collections::HashMap};
+use std::{collections::HashMap, fmt::Debug};
 
 pub use hyper::Method;
+
+use crate::Error;
 
 use super::Response;
 
@@ -10,7 +12,7 @@ pub struct Context;
 /// Trait for anything that can be transformed into Bytes for a successfull
 /// hyper response.
 pub trait Responder {
-    fn into_response(self) -> bytes::Bytes;
+    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error>;
 }
 
 /// The contracts and layout for the structs created with the request macros
@@ -57,10 +59,15 @@ pub trait Responder {
 /// ```
 /// ```
 pub trait Endpoint: Debug + Sync + Send {
-    fn call(&self, request: &hyper::Request<hyper::body::Incoming>) -> Response;
+    fn execute(
+        &self,
+        uri: &hyper::Uri,
+        headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
+        body: &bytes::Bytes,
+    ) -> Response;
     fn path(&self) -> String;
     fn methods(&self) -> Vec<Method>;
     fn props(&self, uri: String) -> HashMap<String, launchpad_uri::Prop> {
-       launchpad_uri::props(&uri, &self.path())
+        launchpad_uri::props(&uri, &self.path())
     }
 }

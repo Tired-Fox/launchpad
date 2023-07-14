@@ -72,7 +72,7 @@ pub fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
 
     let state = match present.state {
         Some(ts) => ts,
-        _ => quote!(::launchpad::Empty),
+        _ => quote!(::launchpad::arguments::Empty),
     };
 
     let data = match present.data {
@@ -82,7 +82,7 @@ pub fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
 
     let call = quote!(
         let mut __lock_state = self.0.lock().unwrap();
-        let __props = ::launchpad_uri::props(&request.uri().path(), &self.path());
+        let __props = ::launchpad_uri::props(&uri.path(), &self.path());
         #data
 
         match #name(#props) {
@@ -90,9 +90,6 @@ pub fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
             Err(__error) => ::launchpad::Response::from(::launchpad::Error::from(__error)),
         }
     );
-
-    // TODO: Parse uri props and compare with method props
-    // Ensure the types are the same
 
     quote! {
          #[derive(Debug)]
@@ -109,7 +106,12 @@ pub fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
                  #path
              }
 
-             fn call(&self, request: &hyper::Request<hyper::body::Incoming>) -> ::launchpad::Response {
+             fn execute(
+                 &self,
+                 uri: &hyper::Uri,
+                 headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
+                 body: &bytes::Bytes
+            ) -> ::launchpad::Response {
                  #function
 
                  #call

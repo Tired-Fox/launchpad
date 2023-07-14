@@ -153,7 +153,7 @@ pub fn compile_props(function: &ItemFn) -> (PresentProps, TokenStream) {
                 _ => {
                     results.push("__data".to_string());
                     present.data = Some(quote! {
-                        let __data = match ::launchpad::Data::<#inner_type>::parse(&request) {
+                        let __data = match ::launchpad::Data::<#inner_type>::parse(headers, body) {
                             Ok(__d) => __d,
                             Err(e) => return ::launchpad::Response::from(e)
                         };

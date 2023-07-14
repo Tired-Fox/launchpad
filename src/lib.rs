@@ -1,19 +1,21 @@
 pub mod endpoint;
 pub mod prelude;
 
+pub mod arguments;
+pub mod response;
 pub mod router;
 pub mod server;
-pub mod arguments;
 
 use std::fmt::Display;
 
+pub use arguments::{Data, State};
 pub use router::Router;
 pub use server::Server;
-pub use arguments::{State, Data};
-
 
 use bytes::Bytes;
 use endpoint::Responder;
+
+static ROOT: &'static str = "web";
 
 pub struct Error(u16, Option<String>);
 impl From<u16> for Error {
@@ -28,7 +30,10 @@ impl<ToString: Display> From<(u16, ToString)> for Error {
 }
 
 impl Error {
-    pub fn new<T, ToString: Display>(code: u16, message: ToString) -> std::result::Result<T, Error> {
+    pub fn new<T, ToString: Display>(
+        code: u16,
+        message: ToString,
+    ) -> std::result::Result<T, Error> {
         Err(Error(code, Some(message.to_string())))
     }
 
@@ -40,13 +45,16 @@ impl Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub enum Response {
-    Success(bytes::Bytes),
+    Success(String, bytes::Bytes),
     Error(u16, Option<String>),
 }
 
 impl<T: Responder> From<T> for Response {
     fn from(value: T) -> Self {
-        Response::Success(value.into_response())
+        match value.into_response() {
+            Ok((content_type, data)) => Response::Success(content_type, data),
+            Err(Error(code, message)) => Response::Error(code, message),
+        }
     }
 }
 
@@ -70,27 +78,27 @@ impl From<(u16, String)> for Response {
 
 // Default Responder implmentation types
 impl Responder for &str {
-    fn into_response(self) -> bytes::Bytes {
-        Bytes::from(self.to_string())
+    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
+        Ok(("text/plain".to_string(), Bytes::from(self.to_string())))
     }
 }
 impl Responder for String {
-    fn into_response(self) -> bytes::Bytes {
-        Bytes::from(self)
+    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
+        Ok(("text/plain".to_string(), Bytes::from(self)))
     }
 }
 impl Responder for &[u8] {
-    fn into_response(self) -> bytes::Bytes {
-        Bytes::from(self.to_vec())
+    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
+        Ok(("text/plain".to_string(), Bytes::from(self.to_vec())))
     }
 }
 impl Responder for Vec<u8> {
-    fn into_response(self) -> bytes::Bytes {
-        Bytes::from(self)
+    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
+        Ok(("text/plain".to_string(), Bytes::from(self)))
     }
 }
 impl Responder for Bytes {
-    fn into_response(self) -> bytes::Bytes {
-        self
+    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
+        Ok(("text/plain".to_string(), self))
     }
 }

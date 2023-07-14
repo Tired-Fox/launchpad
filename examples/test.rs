@@ -1,38 +1,45 @@
 extern crate launchpad;
 
-use launchpad::{prelude::*, Data, Error, Server, State};
+use launchpad::{
+    prelude::*,
+    response::{File, HTML, JSON},
+    Data, Server,
+};
 
 #[tokio::main]
 async fn main() {
     Server::new(([127, 0, 0, 1], 3000))
-        .router(routes![data])
+        .router(routes![home, data])
         .serve()
         .await;
 }
 
-#[derive(Debug, Default)]
-struct WorldState {
-    pub count: u16,
+#[get("/")]
+fn home() -> Result<HTML<File>> {
+    HTML::of(File::from("index.html"))
 }
 
-#[get("/api/name/<firstname>/<lastname>/")]
-fn data(
-    state: &mut State<WorldState>,
-    // _data: Data<HomeData>,
-    firstname: String,
-    lastname: String,
-) -> Result<String> {
-    state.inner_mut().count += 1;
-    Ok(format!(
-        "Hello {} {} ({})",
+#[post("/api/name/<firstname>/<lastname>/")]
+fn data(data: Data<HomeData>, firstname: String, lastname: String) -> Result<JSON<User>> {
+    JSON::of(User {
         firstname,
         lastname,
-        state.inner().count
-    ))
+        age: data.get_ref().age,
+        male: data.get_ref().male,
+    })
     // Error::new(500, "Testing user errors")
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, serde::Serialize)]
+struct User {
+    firstname: String,
+    lastname: String,
+    age: u16,
+    male: bool,
+}
+
+#[derive(Default, Debug, serde::Deserialize)]
 struct HomeData {
-    name: String,
+    age: u16,
+    male: bool,
 }

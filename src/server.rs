@@ -1,4 +1,4 @@
-use http_body_util::Full;
+use http_body_util::{BodyExt, Full};
 pub use hyper::Method;
 use hyper::{server::conn::http1, service::service_fn};
 use std::{convert::Infallible, fs, net::SocketAddr, path::PathBuf};
@@ -12,6 +12,8 @@ use tokio::{
         oneshot,
     },
 };
+
+use crate::ROOT;
 
 use super::{
     router::{Route, Router},
@@ -44,18 +46,20 @@ fn format_body(body: String) -> String {
 
 fn format_request_debug(
     message: String,
-    request: &hyper::Request<hyper::body::Incoming>,
+    method: &hyper::Method,
+    uri: &hyper::Uri,
+    body: &Bytes,
 ) -> String {
     format!(
         r#"<pre>
 {}
     <em>Request: <strong>{} → '{}</strong>'</em>
-    <em>Body: <strong>{:?}</strong></em>
+    <em>Body: <strong>{}</strong></em>
 </pre>"#,
         message,
-        request.method(),
-        request.uri(),
-        request.body()
+        method,
+        uri,
+        String::from_utf8(body.to_vec()).unwrap()
     )
 }
 
@@ -65,9 +69,12 @@ macro_rules! response {
             $data,
         ))))
     };
+    (FILE $data: expr) => {
+        hyper::Response::new(http_body_util::Full::new(bytes::Bytes::from($data)))
+    };
 }
 
-fn build_error(code: u16, msg: String, reason: String) -> hyper::Response<Full<Bytes>> {
+fn build_error(code: u16, msg: String, reason: String, fb: bool) -> hyper::Response<Full<Bytes>> {
     let mut response = hyper::Response::builder().status(code);
     match code {
         301 | 308 | 302 | 303 | 307 => {
@@ -86,7 +93,10 @@ fn build_error(code: u16, msg: String, reason: String) -> hyper::Response<Full<B
     response
         .body(http_body_util::Full::new(bytes::Bytes::from(
             match msg.len() == 0 {
-                false => format_body(msg),
+                false => match fb {
+                    true => format_body(msg),
+                    _ => msg,
+                },
                 _ => msg,
             },
         )))
@@ -94,13 +104,22 @@ fn build_error(code: u16, msg: String, reason: String) -> hyper::Response<Full<B
 }
 macro_rules! error {
     ($code: expr, $reason: expr, $msg: expr) => {
-        build_error($code, $msg, $reason)
+        build_error($code, $msg, $reason, true)
     };
     ($code: expr, $reason: expr) => {
-        build_error($code, String::new(), $reason)
+        build_error($code, String::new(), $reason, true)
     };
     ($code: expr) => {
-        build_error($code, String::new(), String::new())
+        build_error($code, String::new(), String::new(), true)
+    };
+    (RAW $code: expr, $reason: expr, $msg: expr) => {
+        build_error($code, $msg, $reason, false)
+    };
+    (RAW $code: expr, $reason: expr) => {
+        build_error($code, String::new(), $reason, false)
+    };
+    (RAW $code: expr) => {
+        build_error($code, String::new(), String::new(), false)
     };
 }
 
@@ -205,7 +224,21 @@ impl Server {
             }
         });
 
-        println!("Listening on http://{}", self.addr);
+        let message = "http://";
+        let fill = (0..self.addr.to_string().len() + message.len() + 16)
+            .map(|_| '╌')
+            .collect::<String>();
+        println!(
+            "{}",
+            format!(
+                "
+╭{}╮
+╎ 🚀 \x1b[33;1mLaunchpad\x1b[39;22m: {}{} ╎
+╰{}╯
+",
+                fill, message, self.addr, fill
+            )
+        );
         loop {
             let (stream, _) = listener.accept().await.unwrap();
             let router = tx.clone();
@@ -241,14 +274,19 @@ async fn handler(
     if path.ends_with("/") {
         path.pop();
     }
+
     let path_buff = PathBuf::from(path.clone());
+    let uri = req.uri().clone();
+    let headers = req.headers().clone();
+    let method = req.method().clone();
+    let body = req.collect().await.unwrap().to_bytes();
 
     let response = match path_buff.extension() {
         None => {
             let (resp_tx, resp_rx) = oneshot::channel();
             router
                 .send(Command::Get {
-                    method: req.method().clone(),
+                    method: method.clone(),
                     path: path.clone(),
                     response: resp_tx,
                 })
@@ -257,17 +295,26 @@ async fn handler(
 
             let endpoint = resp_rx.await.unwrap();
             match endpoint {
-                Some(endpoint) => match endpoint.endpoint().call(&req) {
-                    Response::Success(data) => hyper::Response::new(Full::new(data)),
+                Some(endpoint) => match endpoint.endpoint().execute(&uri, &headers, &body) {
+                    Response::Success(content_type, data) => hyper::Response::builder()
+                        .status(200)
+                        .header("Content-Type", content_type)
+                        .body(Full::new(data))
+                        .unwrap(),
                     Response::Error(code, message) => {
                         let (resp_tx, resp_rx) = oneshot::channel();
                         router
                             .send(Command::Error {
                                 code: code.clone(),
-                                reason: format_request_debug(match &message {
-                                    Some(msg) => msg.clone(),
-                                    _ => String::from("A user defined error occured"),
-                                }, &req),
+                                reason: format_request_debug(
+                                    match &message {
+                                        Some(msg) => msg.clone(),
+                                        _ => String::from("A user defined error occured"),
+                                    },
+                                    &method,
+                                    &uri,
+                                    &body,
+                                ),
                                 response: resp_tx,
                             })
                             .await
@@ -290,7 +337,9 @@ async fn handler(
                                     "<span class=\"path\"><strong>/{}</strong></span> not found in router",
                                     path_buff.to_string_lossy()
                                 ),
-                                &req
+                                &method,
+                                &uri,
+                                &body
                             ),
                             response: resp_tx,
                         })
@@ -302,6 +351,8 @@ async fn handler(
             }
         }
         Some(_) => {
+            let path_buff = PathBuf::from(format!("{}{}", ROOT, path));
+
             if !path_buff.is_file() {
                 if path_buff.to_str().unwrap().ends_with("html") {
                     let (resp_tx, resp_rx) = oneshot::channel();
@@ -310,7 +361,9 @@ async fn handler(
                             code: 404,
                             reason: format_request_debug(
                                 format!("Could not find file {:?}", path_buff.to_string_lossy()),
-                                &req,
+                                &method,
+                                &uri,
+                                &body,
                             ),
                             response: resp_tx,
                         })
@@ -323,13 +376,38 @@ async fn handler(
                         message
                     )
                 } else {
-                    error!(404, "Path not in router".to_string())
+                    error!(RAW 404, "Path not in router".to_string())
                 }
             } else {
-                response!(fs::read_to_string(path).expect("Could not read from file"))
+                response!(
+                    FILE
+                    fs::read_to_string(path_buff).expect("Could not read from file")
+                )
             }
         }
     };
 
+    #[cfg(debug_assertions)]
+    {
+        let code = response.status().as_u16();
+        println!(
+            "  {} ({}) {}",
+            match method {
+                Method::GET => format!("\x1b[36mGET\x1b[39m"),
+                Method::POST => format!("\x1b[35mPOST\x1b[39m"),
+                Method::DELETE => format!("\x1b[31mDELETE\x1b[39m"),
+                val => format!("{}", val),
+            },
+            match code {
+                100..=199 => format!("\x1b[36m{}\x1b[39m", code),
+                200..=299 => format!("\x1b[32m{}\x1b[39m", code),
+                300..=399 => format!("\x1b[33m{}\x1b[39m", code),
+                400..=499 => format!("\x1b[34m{}\x1b[39m", code),
+                500..=599 => format!("\x1b[35m{}\x1b[39m", code),
+                _ => code.to_string(),
+            },
+            format!("\x1b[32m'{}'\x1b[39m", path)
+        );
+    }
     Ok(response)
 }

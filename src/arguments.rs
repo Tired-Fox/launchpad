@@ -1,5 +1,6 @@
-use std::fmt::{Debug, Display};
-use crate::Response;
+use bytes::Bytes;
+use serde::Deserialize;
+use std::{fmt::Debug, marker::PhantomData};
 
 /// A state/context manager used for individual endpoints
 ///
@@ -85,14 +86,43 @@ impl<T: Default + Debug> Default for State<T> {
 #[derive(Debug, Default)]
 pub struct Empty;
 
-pub struct Data<T: Default>(T);
-impl<T: Default> Data<T> {
-    pub fn parse(_request: &hyper::Request<hyper::body::Incoming>) -> Result<Data<T>, (u16, String)> {
-        // Ok(Data(T::default()));
-        Err((500, "Request data parsing is not implemented".to_string()))
+pub struct Data<'a, B: Default + Deserialize<'a>>(B, PhantomData<&'a B>);
+
+impl<'a, T: Default + Deserialize<'a>> Data<'a, T> {
+    pub fn parse(
+        headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
+        body: &Bytes,
+    ) -> Result<Data<'a, T>, (u16, String)> {
+        match headers.get("Content-Type") {
+            Some(ctype) => {
+                let ctype = ctype.to_str().unwrap().to_lowercase();
+                if ctype.starts_with("application/json") {
+                    parse_json(body)
+                } else {
+                    Err((
+                        500,
+                        format!("Could not parse data from content type: {:?}", ctype),
+                    ))
+                }
+            }
+            None => Ok(Data(T::default(), PhantomData)),
+        }
     }
 
     pub fn get_ref(&self) -> &T {
         &self.0
     }
+}
+
+fn parse_json<'a, T: Default + Deserialize<'a>>(
+    body: &Bytes,
+) -> Result<Data<'a, T>, (u16, String)> {
+    let data: String = String::from_utf8(body.to_vec().clone()).unwrap();
+
+    let result: T = match serde_json::from_str::<T>(Box::leak(data.into_boxed_str())) {
+        Ok(res) => res,
+        Err(_) => return Err((500, "Failed to parse json from request".to_string())),
+    };
+
+    Ok(Data(result, PhantomData))
 }
