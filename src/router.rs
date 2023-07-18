@@ -138,13 +138,13 @@ pub mod error {
 /// }
 /// ```
 #[macro_export]
-macro_rules! routes {
+macro_rules! rts{
     { $($path: literal => $endpoint: ident),* $(,)?} => {
         $crate::Router::from([
             $(
                 $crate::router::Route::new(
                     $path.to_string(),
-                    std::sync::Arc::new($endpoint(std::sync::Mutex::new($crate::arguments::State::default())))
+                    std::sync::Arc::new($endpoint(std::sync::Mutex::new($crate::request::State::default())))
                 ),
             )*
         ])
@@ -154,7 +154,7 @@ macro_rules! routes {
             $(
                 $crate::router::Route::from_endpoint(
                     std::sync::Arc::new(
-                        $endpoint( std::sync::Mutex::new($crate::arguments::State::default()) )
+                        $endpoint( std::sync::Mutex::new($crate::request::State::default()) )
                     )
                 ),
             )*

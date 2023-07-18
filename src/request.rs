@@ -1,6 +1,12 @@
 use bytes::Bytes;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, marker::PhantomData};
+
+use super::response::JSON;
+
+/// Placeholder state context
+#[derive(Debug, Default)]
+pub struct Empty;
 
 /// A state/context manager used for individual endpoints
 ///
@@ -12,7 +18,7 @@ use std::{fmt::Debug, marker::PhantomData};
 /// use launchpad::{prelude::*, State};
 ///
 /// #[get]
-/// fn hello_world(state: State<String>) -> String {
+/// fn hello_world(state: State<String>) -> Result<String> {
 ///     if state.inner() == "".to_string() {
 ///         state.inner_mut().push_str("Hello, world!");
 ///     }
@@ -67,11 +73,11 @@ use std::{fmt::Debug, marker::PhantomData};
 #[derive(Debug)]
 pub struct State<T: Default + Debug>(T);
 impl<T: Default + Debug> State<T> {
-    pub fn inner(&self) -> &T {
+    pub fn get_ref(&self) -> &T {
         &self.0
     }
 
-    pub fn inner_mut(&mut self) -> &mut T {
+    pub fn get_ref_mut(&mut self) -> &mut T {
         &mut self.0
     }
 }
@@ -82,22 +88,39 @@ impl<T: Default + Debug> Default for State<T> {
     }
 }
 
-/// Placeholder state context
-#[derive(Debug, Default)]
-pub struct Empty;
+/// A request content/body/data parser 
+///
+/// This object, given a struct, will parse the request body
+/// into the provided struct that implements Default and serde::Deserialize.
+///
+/// # Example
+/// ```rust
+/// use launchpad::{prelude::*, Data};
+///
+/// #[derive(Default, Deserialize)]
+/// struct ExampleData {
+///     name: String
+/// }
+///
+/// #[get]
+/// fn hello_world(content: Data<ExampleData>) -> Result<String> {
+///     return content.get_ref().name 
+/// }
+/// ```
+pub struct Data<'a, T: Sized + Serialize + Deserialize<'a>>(T, PhantomData<&'a T>);
 
-pub struct Data<'a, B: Default + Deserialize<'a>>(B, PhantomData<&'a B>);
-
-impl<'a, T: Default + Deserialize<'a>> Data<'a, T> {
+impl<'a, T:  Sized + Serialize + Deserialize<'a>> Data<'a, T> {
     pub fn parse(
         headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
         body: &Bytes,
     ) -> Result<Data<'a, T>, (u16, String)> {
+        let data: &str = Box::leak(String::from_utf8(body.to_vec().clone()).unwrap().into_boxed_str());
+
         match headers.get("Content-Type") {
             Some(ctype) => {
                 let ctype = ctype.to_str().unwrap().to_lowercase();
                 if ctype.starts_with("application/json") {
-                    parse_json(body)
+                    JSON::<T>::parse(data)
                 } else {
                     Err((
                         500,
@@ -105,8 +128,8 @@ impl<'a, T: Default + Deserialize<'a>> Data<'a, T> {
                     ))
                 }
             }
-            None => Ok(Data(T::default(), PhantomData)),
-        }
+            None => Err((500, "Unkown Content-Type: application/octet-stream".to_string())),
+        }.map(|r| Data(r, PhantomData))
     }
 
     pub fn get_ref(&self) -> &T {
@@ -114,15 +137,43 @@ impl<'a, T: Default + Deserialize<'a>> Data<'a, T> {
     }
 }
 
-fn parse_json<'a, T: Default + Deserialize<'a>>(
-    body: &Bytes,
-) -> Result<Data<'a, T>, (u16, String)> {
-    let data: String = String::from_utf8(body.to_vec().clone()).unwrap();
+/// A request query parser 
+///
+/// This object, given a struct, will parse the request url query 
+/// into the provided struct that implements Default and serde::Deserialize.
+///
+/// # Example
+/// ```rust
+/// use launchpad::{prelude::*, Query};
+///
+/// #[derive(Default, Deserialize)]
+/// struct ExampleQuery {
+///     name: String
+/// }
+///
+/// #[get]
+/// fn hello_world(query: Query<ExampleQuery>) -> Result<String> {
+///     return content.get_ref().name 
+/// }
+/// ```
+pub struct Query<'a, T: Default + Deserialize<'a>>(T, PhantomData<&'a T>);
 
-    let result: T = match serde_json::from_str::<T>(Box::leak(data.into_boxed_str())) {
-        Ok(res) => res,
-        Err(_) => return Err((500, "Failed to parse json from request".to_string())),
-    };
+impl<'a, T: Default + Deserialize<'a>> Query<'a, T> {
+    pub fn parse(
+        uri: &'a hyper::Uri
+    ) -> Result<Query<'a, T>, (u16, String)> {
+        match uri.query() {
+            Some(query) => {
+                match serde_qs::from_str::<T>(query) {
+                    Ok(query) => Ok(Query(query, PhantomData)),
+                    Err(error) => Err((500, format!("Failed to parse request query: {}", error)))
+                }
+            },
+            None => Ok(Query(T::default(), PhantomData))
+        }
+    }
 
-    Ok(Data(result, PhantomData))
+    pub fn get_ref(&self) -> &T {
+        &self.0
+    }
 }

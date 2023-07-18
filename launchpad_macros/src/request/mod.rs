@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::ItemFn;
+use syn::{ItemFn, Visibility};
 
 mod args;
 mod props;
@@ -34,7 +34,12 @@ macro_rules! request_expand {
             let mut args: Args = parse_macro_input!(args as Args);
             args.methods.push(stringify!($method).to_string());
 
-            build_endpoint(args, parse_macro_input!(function))
+            // Get request doesn't get a body/data
+            if stringify!($method) == "GET" {
+                build_endpoint(args, parse_macro_input!(function), false)
+            } else {
+                build_endpoint(args, parse_macro_input!(function), true)
+            }
         }
     };
 }
@@ -55,7 +60,7 @@ fn build_methods(args: &Args) -> TokenStream2 {
 }
 
 /// Build the endpoint struct
-pub fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
+pub fn build_endpoint(args: Args, mut function: ItemFn, include_data: bool) -> TokenStream {
     let (_uri, path) = match &args.path {
         Some(p) => {
             let p = p.value().clone();
@@ -66,13 +71,16 @@ pub fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
 
     let name = function.sig.ident.clone();
     let methods = build_methods(&args);
-    let (present, props) = compile_props(&function);
+    let (present, props) = compile_props(&function, &include_data);
+
+    let visibility = function.vis.clone();
+    function.vis = Visibility::Inherited;
 
     let props = quote!(#props);
 
     let state = match present.state {
         Some(ts) => ts,
-        _ => quote!(::launchpad::arguments::Empty),
+        _ => quote!(::launchpad::request::Empty),
     };
 
     let data = match present.data {
@@ -80,10 +88,16 @@ pub fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
         _ => quote!(),
     };
 
+    let query = match present.query {
+        Some(ts) => ts,
+        _ => quote!(),
+    };
+
     let call = quote!(
         let mut __lock_state = self.0.lock().unwrap();
-        let __props = ::launchpad_uri::props(&uri.path(), &self.path());
+        let mut __props = ::launchpad_uri::props(&uri.path(), &self.path());
         #data
+        #query
 
         match #name(#props) {
             Ok(__data) => ::launchpad::Response::from(__data),
@@ -92,31 +106,31 @@ pub fn build_endpoint(args: Args, function: ItemFn) -> TokenStream {
     );
 
     quote! {
-         #[derive(Debug)]
-         #[allow(non_camel_case_types)]
-         struct #name(std::sync::Mutex<::launchpad::State<#state>>);
+        #[derive(Debug)]
+        #[allow(non_camel_case_types)]
+        #visibility struct #name(#visibility std::sync::Mutex<::launchpad::request::State<#state>>);
 
-         #[allow(non_camel_case_types)]
-         impl ::launchpad::endpoint::Endpoint for #name {
-             fn methods(&self) -> Vec<hyper::Method> {
-                 #methods
-             }
+        #[allow(non_camel_case_types)]
+        impl ::launchpad::endpoint::Endpoint for #name {
+            fn methods(&self) -> Vec<hyper::Method> {
+                #methods
+            }
 
-             fn path(&self) -> String {
-                 #path
-             }
+            fn path(&self) -> String {
+                #path
+            }
 
-             fn execute(
+            fn execute(
                  &self,
                  uri: &hyper::Uri,
                  headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
                  body: &bytes::Bytes
             ) -> ::launchpad::Response {
-                 #function
+                #function
 
-                 #call
-             }
-         }
+                #call
+            }
+        }
     }
     .into()
 }

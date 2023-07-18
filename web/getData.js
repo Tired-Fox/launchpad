@@ -1,5 +1,8 @@
 async function getData() {
-    let data = await fetch("/api/name/Zachary/Boehm", { 
+    let data = await fetch("/api/name/Zachary/Boehm?" + new URLSearchParams({
+        name: "zachary",
+        age: 23
+    }), { 
         method: 'POST', 
         body: JSON.stringify({ 'age': 23, 'male': true }),
         headers: {

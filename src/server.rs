@@ -352,6 +352,7 @@ async fn handler(
         }
         Some(_) => {
             let path_buff = PathBuf::from(format!("{}{}", ROOT, path));
+            println!("{}", path_buff.display());
 
             if !path_buff.is_file() {
                 if path_buff.to_str().unwrap().ends_with("html") {
@@ -381,7 +382,7 @@ async fn handler(
             } else {
                 response!(
                     FILE
-                    fs::read_to_string(path_buff).expect("Could not read from file")
+                    fs::read(path_buff).expect("Could not read from file")
                 )
             }
         }
@@ -402,7 +403,7 @@ async fn handler(
                 100..=199 => format!("\x1b[36m{}\x1b[39m", code),
                 200..=299 => format!("\x1b[32m{}\x1b[39m", code),
                 300..=399 => format!("\x1b[33m{}\x1b[39m", code),
-                400..=499 => format!("\x1b[34m{}\x1b[39m", code),
+                400..=499 => format!("\x1b[31m{}\x1b[39m", code),
                 500..=599 => format!("\x1b[35m{}\x1b[39m", code),
                 _ => code.to_string(),
             },

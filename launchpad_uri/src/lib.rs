@@ -232,19 +232,28 @@ pub enum Match {
     Discard,
 }
 
-impl From<&Prop> for String {
-    fn from(value: &Prop) -> Self {
+impl From<Prop> for String {
+    fn from(value: Prop) -> Self {
         match value {
-            Prop::Any(v) | Prop::String(v) | Prop::Path(v) => v.clone(),
+            Prop::Any(v) | Prop::String(v) | Prop::Path(v) => v,
             _ => panic!("{:?} can not be converted to String", value)
         }
     }
 }
 
-impl From<&Prop> for i32 {
-    fn from(value: &Prop) -> Self {
+impl From<Prop> for &str {
+    fn from(value: Prop) -> Self {
         match value {
-            Prop::Int(i) => i.clone(),
+            Prop::Any(v) | Prop::String(v) | Prop::Path(v) => Box::leak(v.clone().into_boxed_str()),
+            _ => panic!("{:?} can not be converted to String", value)
+        }
+    }
+}
+
+impl From<Prop> for i32 {
+    fn from(value: Prop) -> Self {
+        match value {
+            Prop::Int(i) => i,
             _ => panic!("{:?} can not be converted to i32", value)
         }
     }

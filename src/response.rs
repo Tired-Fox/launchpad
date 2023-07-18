@@ -1,10 +1,17 @@
 use std::{fmt::Display, fs, path::PathBuf};
 
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use crate::{endpoint::Responder, Error, Result, ROOT};
 
 pub struct JSON<T: Sized + Serialize>(T);
+
+impl <'a, T: Sized + Serialize + Deserialize<'a>> JSON<T> {
+    pub fn parse(value: &'a str) -> std::result::Result<T, (u16, String)> {
+        serde_json::from_str(value).map_err(|_| (500, "Failed to deserialize json".to_string()))
+    }
+}
+
 impl<T: Sized + Serialize> From<T> for JSON<T> {
     fn from(value: T) -> Self {
         JSON(value)
@@ -21,10 +28,11 @@ impl<T: Sized + Serialize> Responder for JSON<T> {
     fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
         match serde_json::to_string(&self.0) {
             Ok(json) => Ok(("application/json".to_string(), bytes::Bytes::from(json))),
-            Err(_) => Error::new(500, "Could not serialize json".to_string()),
+            Err(_) => Error::new(500, "Failed to serialize json".to_string()),
         }
     }
 }
+
 
 pub struct HTML<T: ToString>(T);
 impl<T: ToString> From<T> for HTML<T> {

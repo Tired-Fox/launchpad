@@ -30,6 +30,7 @@ pub fn request(args: TokenStream, function: TokenStream) -> TokenStream {
     build_endpoint(
         parse_macro_input!(args as Args),
         parse_macro_input!(function),
+        true,
     )
 }
 
