@@ -5,13 +5,13 @@ use syn::{FnArg, GenericArgument, ItemFn, Pat, PatType, PathArguments, Type, Vis
 #[derive(Default)]
 pub struct PresentProps {
     pub state: Option<TokenStream>,
-    pub data: Option<TokenStream>,
+    pub content: Option<TokenStream>,
     pub query: Option<TokenStream>,
 }
 
 pub enum Identifier {
     State(bool, Type),
-    Data(Type),
+    Content(Type),
     Query(Type),
     Prop(String),
 }
@@ -21,8 +21,8 @@ fn identify(prop: (String, Type)) -> Identifier {
         return Identifier::State(mutable, inner_type);
     }
 
-    if let Some(inner_type) = get_data(&prop.1) {
-        return Identifier::Data(inner_type);
+    if let Some(inner_type) = get_content(&prop.1) {
+        return Identifier::Content(inner_type);
     }
 
     if let Some(inner_type) = get_query(&prop.1) {
@@ -75,32 +75,32 @@ fn get_state(prop: &Type) -> Option<(bool, Type)> {
     None
 }
 
-fn get_data(prop: &Type) -> Option<Type> {
+fn get_content(prop: &Type) -> Option<Type> {
     match prop {
         Type::Reference(r) => {
             if let Type::Path(path) = &*r.elem {
                 if let Some(seg) = path.path.segments.last() {
-                    if seg.ident.to_string() == "Data".to_string() {
-                        panic!("Expected 'Data<_>' argument to move the variable: was refernce, but should move")
+                    if seg.ident.to_string() == "Content".to_string() {
+                        panic!("Expected 'Content<_>' argument to move the variable: was refernce, but should move")
                     }
                 }
             }
         }
         Type::Path(p) => {
             if let Some(seg) = p.path.segments.last() {
-                if seg.ident.to_string() == "Data".to_string() {
+                if seg.ident.to_string() == "Content".to_string() {
                     match &seg.arguments {
                         PathArguments::AngleBracketed(brackets) => {
                             if brackets.args.len() == 1 {
                                 match &brackets.args[0] {
                                     GenericArgument::Type(t) => return Some(t.clone()),
-                                    _ => panic!("Expected Data<T> generic type to be a type"),
+                                    _ => panic!("Expected Content<T> generic type to be a type"),
                                 }
                             } else {
-                                panic!("Expected one Data<T> generic type")
+                                panic!("Expected one Content<T> generic type")
                             }
                         }
-                        _ => panic!("Expected Data<T> generic type"),
+                        _ => panic!("Expected Content<T> generic type"),
                     };
                 }
             }
@@ -200,17 +200,17 @@ pub fn compile_props(function: &ItemFn, include_data: &bool) -> (PresentProps, T
                     });
                 }
             }
-            Identifier::Data(inner_type) => match present.data {
-                Some(_) => panic!("More than one 'Data<_>' parameter in function"),
+            Identifier::Content(inner_type) => match present.content {
+                Some(_) => panic!("More than one 'Content<_>' parameter in function"),
                 _ => {
                     if !*include_data {
-                        panic!("Request method cannot parse a request body (Data<_>)")
+                        panic!("Request method cannot parse a request body (Content<_>)")
                     }
 
-                    results.push("__data".to_string());
-                    present.data = Some(quote! {
-                        let __data = match ::launchpad::request::Data::<#inner_type>::parse(headers, body) {
-                            Ok(__d) => __d,
+                    results.push("__content".to_string());
+                    present.content = Some(quote! {
+                        let __content = match ::launchpad::request::Content::<#inner_type>::parse(headers, body) {
+                            Ok(__c) => __c,
                             Err(e) => return ::launchpad::Response::from(e)
                         };
                     });

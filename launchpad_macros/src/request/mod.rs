@@ -34,7 +34,7 @@ macro_rules! request_expand {
             let mut args: Args = parse_macro_input!(args as Args);
             args.methods.push(stringify!($method).to_string());
 
-            // Get request doesn't get a body/data
+            // Get request doesn't get a body/content
             if stringify!($method) == "GET" {
                 build_endpoint(args, parse_macro_input!(function), false)
             } else {
@@ -83,7 +83,7 @@ pub fn build_endpoint(args: Args, mut function: ItemFn, include_data: bool) -> T
         _ => quote!(::launchpad::request::Empty),
     };
 
-    let data = match present.data {
+    let content = match present.content {
         Some(ts) => ts,
         _ => quote!(),
     };
@@ -96,7 +96,7 @@ pub fn build_endpoint(args: Args, mut function: ItemFn, include_data: bool) -> T
     let call = quote!(
         let mut __lock_state = self.0.lock().unwrap();
         let mut __props = ::launchpad_uri::props(&uri.path(), &self.path());
-        #data
+        #content
         #query
 
         match #name(#props) {

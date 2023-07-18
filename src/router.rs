@@ -263,6 +263,7 @@ impl Router {
     pub fn get_route<S: Display>(&self, method: Method, path: S) -> Option<&Route> {
         // TODO: use new uri matching
         let path = path.to_string();
+
         match self.routes.get(&method) {
             Some(bucket) => {
                 let result = launchpad_uri::find(&path, &bucket, |s| s.path().clone());

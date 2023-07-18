@@ -107,13 +107,13 @@ impl<T: Default + Debug> Default for State<T> {
 ///     return content.get_ref().name 
 /// }
 /// ```
-pub struct Data<'a, T: Sized + Serialize + Deserialize<'a>>(T, PhantomData<&'a T>);
+pub struct Content<'a, T: Sized + Serialize + Deserialize<'a>>(T, PhantomData<&'a T>);
 
-impl<'a, T:  Sized + Serialize + Deserialize<'a>> Data<'a, T> {
+impl<'a, T:  Sized + Serialize + Deserialize<'a>> Content<'a, T> {
     pub fn parse(
         headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
         body: &Bytes,
-    ) -> Result<Data<'a, T>, (u16, String)> {
+    ) -> Result<Content<'a, T>, (u16, String)> {
         let data: &str = Box::leak(String::from_utf8(body.to_vec().clone()).unwrap().into_boxed_str());
 
         match headers.get("Content-Type") {
@@ -129,7 +129,7 @@ impl<'a, T:  Sized + Serialize + Deserialize<'a>> Data<'a, T> {
                 }
             }
             None => Err((500, "Unkown Content-Type: application/octet-stream".to_string())),
-        }.map(|r| Data(r, PhantomData))
+        }.map(|r| Content(r, PhantomData))
     }
 
     pub fn get_ref(&self) -> &T {

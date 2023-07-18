@@ -276,6 +276,7 @@ async fn handler(
     }
 
     let path_buff = PathBuf::from(path.clone());
+
     let uri = req.uri().clone();
     let headers = req.headers().clone();
     let method = req.method().clone();
@@ -329,13 +330,18 @@ async fn handler(
                 },
                 _ => {
                     let (resp_tx, resp_rx) = oneshot::channel();
+                    println!("{}", path_buff.display());
                     router
                         .send(Command::Error {
                             code: 404,
                             reason: format_request_debug(
                                 format!(
-                                    "<span class=\"path\"><strong>/{}</strong></span> not found in router",
-                                    path_buff.to_string_lossy()
+                                    "<span class=\"path\"><strong>{}{}</strong></span> not found in router",
+                                    match path_buff.display().to_string().as_str() {
+                                        "" => "/",
+                                        _ => ""
+                                    },
+                                    path_buff.display(),
                                 ),
                                 &method,
                                 &uri,
@@ -352,7 +358,6 @@ async fn handler(
         }
         Some(_) => {
             let path_buff = PathBuf::from(format!("{}{}", ROOT, path));
-            println!("{}", path_buff.display());
 
             if !path_buff.is_file() {
                 if path_buff.to_str().unwrap().ends_with("html") {
