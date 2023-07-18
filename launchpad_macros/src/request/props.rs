@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{FnArg, GenericArgument, ItemFn, Pat, PatType, PathArguments, Type, Visibility};
+use syn::{FnArg, GenericArgument, ItemFn, Pat, PatType, PathArguments, Type, Visibility, spanned::Spanned};
+use proc_macro_error::abort;
 
 #[derive(Default)]
 pub struct PresentProps {
@@ -16,7 +17,7 @@ pub enum Identifier {
     Prop(String),
 }
 
-fn identify(prop: (String, Type)) -> Identifier {
+fn identify(prop: &(String, Type)) -> Identifier {
     if let Some((mutable, inner_type)) = get_state(&prop.1) {
         return Identifier::State(mutable, inner_type);
     }
@@ -29,7 +30,7 @@ fn identify(prop: (String, Type)) -> Identifier {
         return Identifier::Query(inner_type);
     }
 
-    Identifier::Prop(prop.0)
+    Identifier::Prop(prop.0.clone())
 }
 
 fn get_state(prop: &Type) -> Option<(bool, Type)> {
@@ -43,13 +44,13 @@ fn get_state(prop: &Type) -> Option<(bool, Type)> {
                                 if brackets.args.len() == 1 {
                                     match &brackets.args[0] {
                                         GenericArgument::Type(t) => t.clone(),
-                                        _ => panic!("Expected State<T> generic type to be a type"),
+                                        _ => abort!(prop, "Expected generic type to be a type"),
                                     }
                                 } else {
-                                    panic!("Expected one State<T> generic type")
+                                    abort!(prop, "Expected one generic type")
                                 }
                             }
-                            _ => panic!("Expected State<T> generic type"),
+                            _ => abort!(prop, "Expected generic type"),
                         };
 
                         return Some((
@@ -66,7 +67,7 @@ fn get_state(prop: &Type) -> Option<(bool, Type)> {
         Type::Path(p) => {
             if let Some(seg) = p.path.segments.last() {
                 if seg.ident.to_string() == "State".to_string() {
-                    panic!("Expected 'State<_>' argument to be a reference: '&State<_>' or '&mut State<_>'")
+                    abort!(prop, "Expected reference or mut reference")
                 }
             }
         }
@@ -81,7 +82,7 @@ fn get_content(prop: &Type) -> Option<Type> {
             if let Type::Path(path) = &*r.elem {
                 if let Some(seg) = path.path.segments.last() {
                     if seg.ident.to_string() == "Content".to_string() {
-                        panic!("Expected 'Content<_>' argument to move the variable: was refernce, but should move")
+                        abort!(prop, "Expected to move parameter, but was referenced")
                     }
                 }
             }
@@ -94,13 +95,13 @@ fn get_content(prop: &Type) -> Option<Type> {
                             if brackets.args.len() == 1 {
                                 match &brackets.args[0] {
                                     GenericArgument::Type(t) => return Some(t.clone()),
-                                    _ => panic!("Expected Content<T> generic type to be a type"),
+                                    _ => abort!(prop, "Expected generic type to be a type"),
                                 }
                             } else {
-                                panic!("Expected one Content<T> generic type")
+                                abort!(prop, "Expected one generic type")
                             }
                         }
-                        _ => panic!("Expected Content<T> generic type"),
+                        _ => abort!(prop, "Expected generic type"),
                     };
                 }
             }
@@ -116,7 +117,7 @@ fn get_query(prop: &Type) -> Option<Type> {
             if let Type::Path(path) = &*r.elem {
                 if let Some(seg) = path.path.segments.last() {
                     if seg.ident.to_string() == "Query".to_string() {
-                        panic!("Expected 'Query<_>' argument to move the variable: was refernce, but should move")
+                        abort!(prop, "Expected to move parameter, but was referenced");
                     }
                 }
             }
@@ -129,13 +130,13 @@ fn get_query(prop: &Type) -> Option<Type> {
                             if brackets.args.len() == 1 {
                                 match &brackets.args[0] {
                                     GenericArgument::Type(t) => return Some(t.clone()),
-                                    _ => panic!("Expected Query<T> generic type to be a type"),
+                                    _ => abort!(prop, "Expected generic type to be a type"),
                                 }
                             } else {
-                                panic!("Expected one Query<T> generic type")
+                                abort!(prop, "Expected one generic type")
                             }
                         }
-                        _ => panic!("Expected Query<T> generic type"),
+                        _ => abort!(prop, "Expected generic type"),
                     };
                 }
             }
@@ -157,7 +158,7 @@ fn parse_props(function: &ItemFn) -> Vec<(String, Type)> {
                 let name = match &*pat {
                     Pat::Ident(pat_ident) => pat_ident.ident.to_string(),
                     _ => {
-                        panic!("Expected named argument")
+                        abort!(ty, "Expected named argument")
                     }
                 };
                 Some((name, *ty))
@@ -171,11 +172,11 @@ pub fn compile_props(function: &ItemFn, include_data: &bool) -> (PresentProps, T
     let mut results = Vec::new();
     let mut present = PresentProps::default();
 
-    for prop in parse_props(&function) {
+    for prop in parse_props(&function).iter() {
         match identify(prop) {
             Identifier::State(mutable, inner_type) => {
                 match present.state {
-                    Some(_) => panic!("More than one 'State<_>' parameter in function"),
+                    Some(_) => abort!(prop.1, "More than one 'State<_>' parameter in function"),
                     _ => {
                         match mutable {
                             true => results.push("&mut *__lock_state".to_string()),
@@ -189,7 +190,7 @@ pub fn compile_props(function: &ItemFn, include_data: &bool) -> (PresentProps, T
                 results.push(format!("__props.remove(\"{}\").unwrap().into()", name));
             }
             Identifier::Query(inner_type) => match present.query {
-                Some(_) => panic!("More than one 'Query<_>' parameter in function"),
+                Some(_) => abort!(prop.1, "More than one 'Query<_>' parameter in function"),
                 _ => {
                     results.push("__query".to_string());
                     present.query = Some(quote! {
@@ -201,10 +202,10 @@ pub fn compile_props(function: &ItemFn, include_data: &bool) -> (PresentProps, T
                 }
             }
             Identifier::Content(inner_type) => match present.content {
-                Some(_) => panic!("More than one 'Content<_>' parameter in function"),
+                Some(_) => abort!(prop.1, "More than one 'Content<_>' parameter in function"),
                 _ => {
                     if !*include_data {
-                        panic!("Request method cannot parse a request body (Content<_>)")
+                        abort!(prop.1, "Request method cannot parse a request body (Content<_>)")
                     }
 
                     results.push("__content".to_string());

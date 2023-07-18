@@ -29,6 +29,7 @@ macro_rules! request_expand {
         ///     Ok("Home")
         /// }
         /// ```
+        #[proc_macro_error::proc_macro_error]
         #[proc_macro_attribute]
         pub fn $name(args: TokenStream, function: TokenStream) -> TokenStream {
             let mut args: Args = parse_macro_input!(args as Args);
@@ -68,6 +69,8 @@ pub fn build_endpoint(args: Args, mut function: ItemFn, include_data: bool) -> T
         }
         None => (String::new(), quote!(panic!("No path provided in macro"))),
     };
+
+    
 
     let name = function.sig.ident.clone();
     let methods = build_methods(&args);

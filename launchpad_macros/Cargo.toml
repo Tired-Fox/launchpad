@@ -12,6 +12,7 @@ syn = { version = "2.0.23", features = ["full", "fold", "extra-traits"] }
 syn-mid = "0.5.4"
 proc-macro2 = "1.0.64"
 launchpad-uri = { path="../launchpad_uri" }
+proc-macro-error = "1.0.4"
 
 [lib]
 proc-macro=true

@@ -3,6 +3,7 @@ extern crate proc_macro;
 mod request;
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
+use proc_macro_error::proc_macro_error;
 
 use request::{build_endpoint, request_expand, Args};
 
@@ -25,6 +26,7 @@ use request::{build_endpoint, request_expand, Args};
 /// #[request(methods=[get, post, delete])]
 /// fn home() -> Result<&'static str> {}
 /// ```
+#[proc_macro_error]
 #[proc_macro_attribute]
 pub fn request(args: TokenStream, function: TokenStream) -> TokenStream {
     build_endpoint(

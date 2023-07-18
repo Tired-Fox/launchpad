@@ -43,6 +43,7 @@ struct HomeData {
     age: u16,
     male: bool,
 }
+
 #[derive(Debug, Default)]
 pub struct HomeState {
     name: String

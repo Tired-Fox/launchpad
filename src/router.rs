@@ -121,11 +121,11 @@ pub mod error {
 /// }
 /// ```
 ///
-/// `routes!` can be used like the `vec!` macro
+/// `rts!` can be used like the `vec!` macro
 /// ```
 /// use launchpad::prelude::*;
 ///
-/// let router = routes![home]
+/// let router = rts![home]
 /// ```
 ///
 /// If you want to specify the `route/uri` for the endpoint in the macro you can
@@ -133,7 +133,7 @@ pub mod error {
 /// ```
 /// use launchpad::prelude::*;
 ///
-/// let router = routes!{
+/// let router = rts!{
 ///     "/": home
 /// }
 /// ```
