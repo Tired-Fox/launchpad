@@ -1,5 +1,10 @@
 extern crate launchpad;
-use launchpad::{prelude::*, response::JSON, request::{State, Content, Query}, Result};
+use launchpad::{
+    prelude::*,
+    request::{Content, Query, State},
+    response::JSON,
+    Result,
+};
 
 #[post("/api/name/<firstname>/<lastname>/")]
 pub fn data(
@@ -7,7 +12,7 @@ pub fn data(
     firstname: String,
     lastname: String,
     data: Content<HomeData>,
-    query: Query<UserQuery>
+    query: Query<UserQuery>,
 ) -> Result<JSON<User>> {
     println!("{:?}", query.get_ref());
 
@@ -27,7 +32,7 @@ pub fn data(
 #[derive(Debug, Default, serde::Deserialize)]
 struct UserQuery {
     name: String,
-    age: u16
+    age: u16,
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -46,5 +51,5 @@ struct HomeData {
 
 #[derive(Debug, Default)]
 pub struct HomeState {
-    name: String
+    name: String,
 }

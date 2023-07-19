@@ -3,20 +3,23 @@ name = "launchpad"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-bytes = "1.4.0"
-tokio = { version = "1.29.1", features = ["full"] }
-hyper = { version = "1.0.0-rc.3", features=["full"]}
-http-body-util = "0.1.0-rc.2"
 launchpad-macros = { path = "launchpad_macros" }
 launchpad-uri = { path = "launchpad_uri" }
+
+bytes = "1.4.0"
+tokio = { version = "1.29.1", features = ["full"] }
+hyper = { version = "1.0.0-rc.4", features = ["full"] }
+http-body-util = "0.1.0-rc.2"
+
 serde_json = "1.0.100"
 serde = "1.0.167"
 phf = { version = "0.11.2", features = ["macros", "phf_macros"] }
+
 cargo-expand = "1.0.59"
 regex = "1.9.1"
-futures = "0.3.28"
 serde_qs = "0.12.0"
-proc-macro-error = "1.0.4"
+
+# Needed for breaking hyper changes - Tokio::io to hyper::rt IO impl's under src/support/*
+pin-project-lite = "0.2.10"
+futures-util = "0.3.28"

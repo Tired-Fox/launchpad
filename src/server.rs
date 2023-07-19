@@ -13,6 +13,8 @@ use tokio::{
     },
 };
 
+use super::support::TokioIo;
+
 use crate::ROOT;
 
 use super::{
@@ -224,27 +226,33 @@ impl Server {
             }
         });
 
-        let message = "http://";
-        let fill = (0..self.addr.to_string().len() + message.len() + 16)
-            .map(|_| '╌')
-            .collect::<String>();
-        println!(
-            "{}",
-            format!(
-                "
+        // Server start cli banner
+        {
+            let message = "http://";
+            let fill = (0..self.addr.to_string().len() + message.len() + 16)
+                .map(|_| '╌')
+                .collect::<String>();
+            println!(
+                "{}",
+                format!(
+                    "
 ╭{}╮
 ╎ 🚀 \x1b[33;1mLaunchpad\x1b[39;22m: {}{} ╎
 ╰{}╯
 ",
-                fill, message, self.addr, fill
-            )
-        );
+                    fill, message, self.addr, fill
+                )
+            );
+        }
+
         loop {
             let (stream, _) = listener.accept().await.unwrap();
             let router = tx.clone();
+            let io = TokioIo::new(stream);
+
             tokio::task::spawn(async move {
                 if let Err(err) = http1::Builder::new()
-                    .serve_connection(stream, service_fn(|req| handler(req, router.clone())))
+                    .serve_connection(io, service_fn(|req| handler(req, router.clone())))
                     .await
                 {
                     eprintln!("Failed to serve connection: {:?}", err);

@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
-use quote::quote;
-use syn::{FnArg, GenericArgument, ItemFn, Pat, PatType, PathArguments, Type, Visibility, spanned::Spanned};
 use proc_macro_error::abort;
+use quote::quote;
+use syn::{FnArg, GenericArgument, ItemFn, Pat, PatType, PathArguments, Type};
 
 #[derive(Default)]
 pub struct PresentProps {
@@ -200,12 +200,15 @@ pub fn compile_props(function: &ItemFn, include_data: &bool) -> (PresentProps, T
                         };
                     });
                 }
-            }
+            },
             Identifier::Content(inner_type) => match present.content {
                 Some(_) => abort!(prop.1, "More than one 'Content<_>' parameter in function"),
                 _ => {
                     if !*include_data {
-                        abort!(prop.1, "Request method cannot parse a request body (Content<_>)")
+                        abort!(
+                            prop.1,
+                            "Request method cannot parse a request body (Content<_>)"
+                        )
                     }
 
                     results.push("__content".to_string());
