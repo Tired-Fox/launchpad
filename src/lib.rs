@@ -19,6 +19,7 @@ use endpoint::Responder;
 
 static ROOT: &'static str = "web";
 
+#[derive(Debug)]
 pub struct Error(u16, Option<String>);
 impl From<u16> for Error {
     fn from(value: u16) -> Self {
@@ -32,14 +33,29 @@ impl<ToString: Display> From<(u16, ToString)> for Error {
 }
 
 impl Error {
-    pub fn new<T, ToString: Display>(
+    pub fn code(&self) -> &u16 {
+        &self.0
+    }
+
+    pub fn message(&self) -> Option<&String> {
+        self.1.as_ref()
+    }
+
+    pub fn new<ToString: Display>(
+        code: u16,
+        message: ToString,
+    ) -> Self {
+        Error(code, Some(message.to_string()))
+    }
+
+    pub fn of<T, ToString: Display>(
         code: u16,
         message: ToString,
     ) -> std::result::Result<T, Error> {
         Err(Error(code, Some(message.to_string())))
     }
 
-    pub fn code<T>(code: u16) -> std::result::Result<T, Error> {
+    pub fn of_code<T>(code: u16) -> std::result::Result<T, Error> {
         Err(Error(code, None))
     }
 }

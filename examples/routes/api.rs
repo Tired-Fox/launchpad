@@ -3,7 +3,6 @@ use launchpad::{
     prelude::*,
     request::{Content, Query, State},
     response::JSON,
-    Result,
 };
 
 #[post("/api/name/<firstname>/<lastname>/")]
@@ -21,6 +20,25 @@ pub fn data(
     }
     println!("HomeState: {}", state.get_ref().name);
 
+    // Serialize from file
+    // use launchpad::response::File;
+    // JSON::parse(File::from("user.json"))
+
+    // Deserialize from string into struct then serialize into bytes
+    // This insures that the data is valid before returning
+    // JSON::parse(format!(r#"{{
+    //    "firstname": "{}",
+    //    "lastname": "{}",
+    //    "age": {},
+    //    "male": {}
+    // }}"#,
+    //     firstname,
+    //     lastname,
+    //     data.get_ref().age,
+    //     data.get_ref().male
+    // ).as_str())
+
+    // From a serializable struct
     JSON::of(User {
         firstname,
         lastname,

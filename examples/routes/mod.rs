@@ -10,5 +10,5 @@ pub fn index() -> Result<HTML<File>> {
 
 #[get("/error")]
 pub fn error_page() -> Result<HTML<&'static str>> {
-    Error::new(500, "Custom user error response")
+    Error::of(500, "Custom user error response")
 }

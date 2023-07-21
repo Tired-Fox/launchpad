@@ -2,6 +2,8 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, marker::PhantomData};
 
+use crate::{Error, Result};
+
 use super::response::JSON;
 
 /// Placeholder state context
@@ -113,22 +115,19 @@ impl<'a, T:  Sized + Serialize + Deserialize<'a>> Content<'a, T> {
     pub fn parse(
         headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
         body: &Bytes,
-    ) -> Result<Content<'a, T>, (u16, String)> {
+    ) -> Result<Content<'a, T>> {
         let data: &str = Box::leak(String::from_utf8(body.to_vec().clone()).unwrap().into_boxed_str());
 
         match headers.get("Content-Type") {
             Some(ctype) => {
                 let ctype = ctype.to_str().unwrap().to_lowercase();
                 if ctype.starts_with("application/json") {
-                    JSON::<T>::parse(data)
+                    JSON::<T>::parse(data).map(|json| json.0)
                 } else {
-                    Err((
-                        500,
-                        format!("Could not parse data from content type: {:?}", ctype),
-                    ))
+                    Error::of(500, format!("Could not parse data from content type: {:?}", ctype))
                 }
             }
-            None => Err((500, "Unkown Content-Type: application/octet-stream".to_string())),
+            None => Error::of(500, "Unkown Content-Type: application/octet-stream"),
         }.map(|r| Content(r, PhantomData))
     }
 
@@ -161,12 +160,12 @@ pub struct Query<'a, T: Default + Deserialize<'a>>(T, PhantomData<&'a T>);
 impl<'a, T: Default + Deserialize<'a>> Query<'a, T> {
     pub fn parse(
         uri: &'a hyper::Uri
-    ) -> Result<Query<'a, T>, (u16, String)> {
+    ) -> Result<Query<'a, T>> {
         match uri.query() {
             Some(query) => {
                 match serde_qs::from_str::<T>(query) {
                     Ok(query) => Ok(Query(query, PhantomData)),
-                    Err(error) => Err((500, format!("Failed to parse request query: {}", error)))
+                    Err(error) => Error::of(500, format!("Failed to parse request query: {}", error))
                 }
             },
             None => Ok(Query(T::default(), PhantomData))
