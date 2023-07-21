@@ -5,14 +5,23 @@ use launchpad::{
     response::JSON,
 };
 
+#[post("/api/plain")]
+pub fn plain(
+    // Support for primitives and Enums. This consumes the entire body and must be text/plain
+    content: Content<String>,
+) -> Result<String> {
+    Ok(content.get_ref().clone())
+}
+
 #[post("/api/name/<firstname>/<lastname>/")]
 pub fn data(
     state: &mut State<HomeState>,
     firstname: String,
     lastname: String,
-    data: Content<HomeData>,
+    content: Content<HomeData>,
     query: Query<UserQuery>,
 ) -> Result<JSON<User>> {
+
     println!("UserQuery: {}, {}", query.get_ref().name, query.get_ref().age);
 
     if state.get_ref().name == String::new() {
@@ -42,8 +51,8 @@ pub fn data(
     JSON::of(User {
         firstname,
         lastname,
-        age: data.get_ref().age,
-        male: data.get_ref().male,
+        age: content.get_ref().age,
+        male: content.get_ref().male,
     })
 }
 

@@ -17,3 +17,20 @@ async function getData() {
         console.log(data);
     }
 }
+
+async function getPlain() {
+    let data = await fetch("/api/plain", { 
+        method: 'POST', 
+        body: 'Some other data',
+        headers: {
+          'Content-Type': 'text/plain; charset=UTF-8',
+        },
+    });
+
+    if ( data.ok ) {
+        let res = await data.text();
+        console.log(res);
+    } else {
+        console.log(data);
+    }
+}
