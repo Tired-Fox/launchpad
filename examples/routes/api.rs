@@ -14,12 +14,12 @@ pub fn data(
     data: Content<HomeData>,
     query: Query<UserQuery>,
 ) -> Result<JSON<User>> {
-    println!("{:?}", query.get_ref());
+    println!("UserQuery: {}, {}", query.get_ref().name, query.get_ref().age);
 
     if state.get_ref().name == String::new() {
         state.get_ref_mut().name = String::from("Zachary");
     }
-    println!("{:?}", state.get_ref());
+    println!("HomeState: {}", state.get_ref().name);
 
     JSON::of(User {
         firstname,
