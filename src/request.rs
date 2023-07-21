@@ -133,10 +133,16 @@ impl<'a, T:  Sized + Serialize + Deserialize<'a>> Content<'a, T> {
                 let ctype = ctype.to_str().unwrap().to_lowercase();
                 if ctype.starts_with("application/json") {
                     JSON::<T>::parse(data).map(|json| json.0)
-                } else if ctype.starts_with("text/plain") {
+                // Text plain or octet stream are parsed into primitive types
+                // PERF: Better handling of octet-stream
+                } else if ctype.starts_with("text/") || ctype.starts_with("application/octet-stream") {
                     serde_plain::from_str::<T>(data).map_err(
-                        |_| Error::new(500, "Failed to deserialize text/plain request body")
+                        |_| Error::new(
+                            500,
+                            format!("Failed to deserialize text/plain into '{}'", std::any::type_name::<T>())
+                        )
                     )
+                // TODO: Support for other popular types behind feature flags
                 } else {
                     Error::of(500, format!("Could not parse data from content type: {:?}", ctype))
                 }

@@ -82,41 +82,8 @@ impl From<Error> for Response {
     }
 }
 
-impl From<u16> for Response {
-    fn from(value: u16) -> Self {
-        Response::Error(value, None)
-    }
-}
-
-impl From<(u16, String)> for Response {
-    fn from(value: (u16, String)) -> Self {
-        Response::Error(value.0, Some(value.1))
-    }
-}
-
-// Default Responder implmentation types
-impl Responder for &str {
+impl<T: Display> Responder for T {
     fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
         Ok(("text/plain".to_string(), Bytes::from(self.to_string())))
-    }
-}
-impl Responder for String {
-    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
-        Ok(("text/plain".to_string(), Bytes::from(self)))
-    }
-}
-impl Responder for &[u8] {
-    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
-        Ok(("text/plain".to_string(), Bytes::from(self.to_vec())))
-    }
-}
-impl Responder for Vec<u8> {
-    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
-        Ok(("text/plain".to_string(), Bytes::from(self)))
-    }
-}
-impl Responder for Bytes {
-    fn into_response(self) -> std::result::Result<(String, bytes::Bytes), Error> {
-        Ok(("text/plain".to_string(), self))
     }
 }

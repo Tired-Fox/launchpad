@@ -21,7 +21,7 @@ async function getData() {
 async function getPlain() {
     let data = await fetch("/api/plain", { 
         method: 'POST', 
-        body: 'Some other data',
+        body: 'Some Plain Text',
         headers: {
           'Content-Type': 'text/plain; charset=UTF-8',
         },

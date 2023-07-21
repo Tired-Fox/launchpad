@@ -25,15 +25,6 @@ pub enum CType {
     Any,
 }
 
-impl Display for CType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            CType::Int => "i32",
-            CType::Path | CType::String | CType::Any => "String",
-        })
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Prop {
     String(String),
