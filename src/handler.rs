@@ -217,7 +217,6 @@ impl RouteHandler {
             // Endpoint doesn't exists so respond with 404 not found
             _ => {
                 let (resp_tx, resp_rx) = oneshot::channel();
-                println!("{}", path_buff.display());
                 self.router()
                     .send(Command::Error {
                         code: 404,

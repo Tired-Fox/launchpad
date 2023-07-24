@@ -53,22 +53,22 @@ pub(crate) enum Command {
 /// }
 /// ```
 pub struct Server {
-    addr: SocketAddr,
     router: Arc<Mutex<Router>>,
 }
 
 impl Server {
-    /// Create a new server with a given address
+    /// Create a new server
     ///
-    /// The method can take anything that can be converted into a SocketAddr
+    /// The server can then be served with the `serve` method with a given address
+    /// which can be anything that can be converted into a `SocketAddr`.
     ///
     /// # Example
     /// ```rust
     /// use launchpad::{prelude::*, Server};
     ///
     /// fn main() {
-    ///     Server::new(([127, 0, 0, 1], 3000))
-    ///         .serve()
+    ///     Server::new()
+    ///         .serve(([127, 0, 0, 1], 3000))
     ///         .await;
     /// }
     /// ```
@@ -77,14 +77,13 @@ impl Server {
     /// use launchpad::{prelude::*, Server};
     ///
     /// fn main() {
-    ///     Server::new("127.0.0.1:3000")
-    ///         .serve()
+    ///     Server::new()
+    ///         .serve(3000)
     ///         .await;
     /// }
     /// ```
-    pub fn new(addr: impl Into<SocketAddr>) -> Self {
+    pub fn new() -> Self {
         Server {
-            addr: addr.into(),
             router: Arc::new(Mutex::new(Router::new())),
         }
     }
@@ -128,9 +127,9 @@ impl Server {
     }
 
     /// Prints the cli banner for when the server starts 
-    fn cli_banner(&self) {
+    fn cli_banner(&self, addr: &SocketAddr) {
         let message = "http://";
-        let fill = (0..self.addr.to_string().len() + message.len() + 16)
+        let fill = (0..addr.to_string().len() + message.len() + 16)
             .map(|_| '╌')
             .collect::<String>();
         println!(
@@ -141,7 +140,7 @@ impl Server {
 ╎ 🚀 \x1b[33;1mLaunchpad\x1b[39;22m: {}{} ╎
 ╰{}╯
 ",
-                fill, message, self.addr, fill
+                fill, message, addr, fill
             )
         );
     }
@@ -153,28 +152,36 @@ impl Server {
     /// use launchpad::{prelude::*, Server};
     ///
     /// fn main() {
-    ///     Server::new("127.0.0.1:3000")
-    ///         .serve()
+    ///     Server::new()
+    ///         .serve(3000)
     ///         .await;
     /// }
     /// ```
-    pub async fn serve(&self) {
-        let listener = TcpListener::bind(self.addr).await.unwrap();
+    pub async fn serve<Socket: IntoSocket>(&self, addr: Socket) {
+        let addr: SocketAddr = addr.into_socket();
+
+        // Start server
+        let listener = TcpListener::bind(addr.clone()).await.unwrap();
+        // Start router channel/listener and get a handle to it 
         let tx = self.serve_routes();
 
+        // CLI log to indicate server is up
+
         #[cfg(debug_assertions)]
-        self.cli_banner();
-
+        self.cli_banner(&addr);
         #[cfg(not(debug_assertions))]
-        println!("{}", self.addr);
+        println!("{}", addr);
 
+        // Create a single route handler/resolver that has a handle to the router channel
         let handler = Arc::new(RouteHandler::new(tx.clone()));
 
+        // Loop through the connections an resolve them with async tasks
         loop {
             let (stream, _) = listener.accept().await.unwrap();
 
             // PERF: This is currently only because hyper read and write needs to be
-            // impl for new tokio read and write streams.
+            // impl for new tokio read and write streams. Caused by newest version of
+            // tokio.
             let io = TokioIo::new(stream);
 
             // Get new pointer to RouteHandler
@@ -201,5 +208,21 @@ impl Server {
             router: Arc::new(Mutex::new(router)),
             ..self
         }
+    }
+}
+
+pub trait IntoSocket {
+    fn into_socket(self) -> SocketAddr;
+}
+
+impl IntoSocket for ([u8;4], u16) {
+    fn into_socket(self) -> SocketAddr {
+        SocketAddr::from(self)
+    }
+}
+
+impl IntoSocket for u16 {
+    fn into_socket(self) -> SocketAddr {
+        SocketAddr::from(([127, 0, 0, 1], self))
     }
 }

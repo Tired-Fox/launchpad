@@ -1,11 +1,11 @@
 use syn::{bracketed, parse::Parse, punctuated::Punctuated, Ident, LitStr, Result, Token};
 
-pub struct Args {
+pub struct RequestArgs {
     pub path: Option<LitStr>,
     pub methods: Vec<String>,
 }
 
-impl Default for Args {
+impl Default for RequestArgs {
     fn default() -> Self {
         Self {
             path: None,
@@ -14,7 +14,7 @@ impl Default for Args {
     }
 }
 
-impl Parse for Args {
+impl Parse for RequestArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut path = None;
         if input.peek(LitStr) {
@@ -40,6 +40,6 @@ impl Parse for Args {
                 .collect()
         }
 
-        Ok(Args { path, methods })
+        Ok(RequestArgs { path, methods })
     }
 }

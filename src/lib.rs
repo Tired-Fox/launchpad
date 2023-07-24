@@ -62,8 +62,11 @@ impl Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Debug)]
 pub enum Response {
+    // Content-Type, Body
     Success(String, bytes::Bytes),
+    // Code, ?Message
     Error(u16, Option<String>),
 }
 

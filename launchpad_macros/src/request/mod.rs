@@ -1,13 +1,18 @@
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{ItemFn, Visibility};
 
 mod args;
 mod props;
+mod methods;
 
-pub use args::Args;
+pub use args::RequestArgs;
 use props::compile_props;
+use self::methods::build_method_comment_list;
+
+use super::docs::compile_docs;
+use methods::compile_methods_vec;
 
 macro_rules! request_expand {
     ($name: ident, $method: ident) => {
@@ -32,7 +37,7 @@ macro_rules! request_expand {
         #[proc_macro_error::proc_macro_error]
         #[proc_macro_attribute]
         pub fn $name(args: TokenStream, function: TokenStream) -> TokenStream {
-            let mut args: Args = parse_macro_input!(args as Args);
+            let mut args: RequestArgs = parse_macro_input!(args);
             args.methods.push(stringify!($method).to_string());
 
             // Get request doesn't get a body/content
@@ -46,83 +51,69 @@ macro_rules! request_expand {
 }
 pub(crate) use request_expand;
 
-fn build_methods(args: &Args) -> TokenStream2 {
-    format!(
-        "vec![{}]",
-        args.methods
-            .iter()
-            .map(|m| format!("hyper::Method::{}", m))
-            .collect::<Vec<String>>()
-            .join(", ")
-    )
-    .parse::<TokenStream>()
-    .unwrap()
-    .into()
+/// Update the function signature to better fit in its scope
+fn update_function(function: &mut ItemFn) {
+    function.vis = Visibility::Inherited;
+    function.sig.ident = Ident::new("__endpoint", function.sig.ident.span());
 }
 
 /// Build the endpoint struct
-pub fn build_endpoint(args: Args, mut function: ItemFn, include_data: bool) -> TokenStream {
-    let (_uri, path) = match &args.path {
+pub fn build_endpoint(args: RequestArgs, mut function: ItemFn, include_data: bool) -> TokenStream {
+    let (uri, path) = match &args.path {
         Some(p) => {
             let p = p.value().clone();
-            (p.clone(), quote!(String::from(#p)))
+            (p.clone(), quote!(#p))
         }
         None => (String::new(), quote!(panic!("No path provided in macro"))),
     };
 
-    
-
+    // Collect information from function
     let name = function.sig.ident.clone();
-    let methods = build_methods(&args);
     let (present, props) = compile_props(&function, &include_data);
-
+    let methods = compile_methods_vec(&args);
+    let docs = format!("#[doc=\"{} endpoint for `{}`\n\n{}\"]", 
+        build_method_comment_list(&args),
+        uri,
+        compile_docs(&mut function)
+    ).parse::<TokenStream2>().unwrap();
     let visibility = function.vis.clone();
-    function.vis = Visibility::Inherited;
 
-    let props = quote!(#props);
+    update_function(&mut function);
 
-    let state = match present.state {
+    // Construct special endpoint props
+    let state_type = match present.state {
         Some(ts) => ts,
         _ => quote!(::launchpad::request::Empty),
     };
-
-    let content = match present.content {
+    let content_local = match present.content {
+        Some(ts) => ts,
+        _ => quote!(),
+    };
+    let query_local = match present.query {
         Some(ts) => ts,
         _ => quote!(),
     };
 
-    let query = match present.query {
-        Some(ts) => ts,
-        _ => quote!(),
-    };
-
-    let call = quote!(
-        let mut __lock_state = self.0.lock().unwrap();
-        let mut __props = ::launchpad_uri::props(&uri.path(), &self.path());
-        #content
-        #query
-
-        match #name(#props) {
-            Ok(__data) => ::launchpad::Response::from(__data),
-            Err(__error) => ::launchpad::Response::from(::launchpad::Error::from(__error)),
-        }
-    );
-
+    // Construct entire endpoint
     quote! {
+        #docs
         #[derive(Debug)]
         #[allow(non_camel_case_types)]
-        #visibility struct #name(#visibility std::sync::Mutex<::launchpad::request::State<#state>>);
+        #visibility struct #name(pub std::sync::Mutex<::launchpad::request::State<#state_type>>);
 
         #[allow(non_camel_case_types)]
         impl ::launchpad::endpoint::Endpoint for #name {
+            #[inline]
             fn methods(&self) -> Vec<hyper::Method> {
                 #methods
             }
 
+            #[inline]
             fn path(&self) -> String {
-                #path
+                String::from(#path)
             }
 
+            #[inline]
             fn execute(
                  &self,
                  uri: &hyper::Uri,
@@ -131,7 +122,15 @@ pub fn build_endpoint(args: Args, mut function: ItemFn, include_data: bool) -> T
             ) -> ::launchpad::Response {
                 #function
 
-                #call
+                let mut __lock_state = self.0.lock().unwrap();
+                let mut __props = ::launchpad_uri::props(&uri.path(), &self.path());
+                #content_local
+                #query_local
+
+                match __endpoint(#props) {
+                    Ok(__data) => ::launchpad::Response::from(__data),
+                    Err(__error) => ::launchpad::Response::from(::launchpad::Error::from(__error)),
+                }
             }
         }
     }

@@ -2,14 +2,14 @@ use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use hyper::Method;
 
-use super::endpoint::Endpoint;
+use super::endpoint::{Endpoint, ErrorCatch};
 
 
 pub mod error {
     use phf::phf_map;
 
     /// Default http error messages
-    static MESSAGES: phf::Map<u16, &'static str> = phf_map! {
+    pub static MESSAGES: phf::Map<u16, &'static str> = phf_map! {
         100u16 => "Continue",
         101u16 => "Switching protocols",
         102u16 => "Processing",
@@ -137,28 +137,50 @@ pub mod error {
 ///     "/": home
 /// }
 /// ```
-#[macro_export]
-macro_rules! rts{
-    { $($path: literal => $endpoint: ident),* $(,)?} => {
-        $crate::Router::from([
-            $(
-                $crate::router::Route::new(
-                    $path.to_string(),
-                    std::sync::Arc::new($endpoint(std::sync::Mutex::new($crate::request::State::default())))
-                ),
-            )*
-        ])
-    };
-    [ $($endpoint: ident),* $(,)?] => {
-        $crate::Router::from([
-            $(
-                $crate::router::Route::from_endpoint(
-                    std::sync::Arc::new(
-                        $endpoint( std::sync::Mutex::new($crate::request::State::default()) )
-                    )
-                ),
-            )*
-        ])
+// #[macro_export]
+// macro_rules! rts{
+//     { $($path: literal => $endpoint: ident),* $(,)?} => {
+//         $crate::Router::from([
+//             $(
+//                 $crate::router::Route::new(
+//                     $path,
+//                     std::sync::Arc::new($endpoint(std::sync::Mutex::new($crate::request::State::default())))
+//                 ),
+//             )*
+//         ])
+//     };
+//     [ $($endpoint: ident),* $(,)?] => {
+//         $crate::Router::from([
+//             $(
+//                 $crate::router::Route::from_endpoint(
+//                     std::sync::Arc::new(
+//                         $endpoint( std::sync::Mutex::new($crate::request::State::default()) )
+//                     )
+//                 ),
+//             )*
+//         ])
+//     };
+// }
+
+/// A constructed and initialized error that is linked to a error handler
+#[derive(Debug, Clone)]
+pub struct Catch(u16, Arc<dyn ErrorCatch>);
+
+impl Catch {
+    pub fn new(code: u16, handler: Arc<dyn ErrorCatch>) -> Self {
+        Catch(code, handler)
+    }
+
+    pub fn from_catch(handler: Arc<dyn ErrorCatch>) -> Self {
+        Catch(handler.code().clone(), handler)
+    }
+
+    pub fn code(&self) -> &u16 {
+        &self.0
+    }
+
+    pub fn execute(&self, message: String) -> String {
+        self.1.execute(message)
     }
 }
 
@@ -224,7 +246,7 @@ impl Clone for Route {
 #[derive(Debug, Clone)]
 pub struct Router {
     routes: HashMap<Method, Vec<Route>>,
-    errors: HashMap<u16, fn(u16, String) -> String>,
+    errors: HashMap<u16, Catch>,
 }
 
 // <HEAP> [hello("/api/name/<first>/<last>"), world("/api/<...path>/help")] <- endpoints
@@ -250,6 +272,43 @@ impl<const SIZE: usize> From<[Route; SIZE]> for Router {
     }
 }
 
+impl<const ROUTES: usize, const ERRORS: usize> From<([Route; ROUTES], [Catch; ERRORS])> for Router {
+    fn from(value: ([Route; ROUTES], [Catch; ERRORS])) -> Self {
+        let mut router = Router::new();
+        for route in value.0 {
+            router.set_route(route.path().clone(), route)
+        }
+
+        for error in value.1 {
+            router.set_error(error.code().clone(), error)
+        }
+        router
+    }
+}
+
+impl<const SIZE: usize> From<[Catch; SIZE]> for Router {
+    fn from(value: [Catch; SIZE]) -> Self {
+        let mut router = Router::new();
+        for val in value {
+            router.set_error(val.code().clone(), val)
+        }
+        router
+    }
+}
+
+impl<const ROUTES: usize, const ERRORS: usize> From<([Catch; ROUTES], [Route; ERRORS])> for Router {
+    fn from(value: ([Catch; ROUTES], [Route; ERRORS])) -> Self {
+        let mut router = Router::new();
+        for route in value.1 {
+            router.set_route(route.path().clone(), route)
+        }
+
+        for error in value.0 {
+            router.set_error(error.code().clone(), error)
+        }
+        router
+    }
+}
 impl Router {
     /// Create a new blank router
     pub fn new() -> Self {
@@ -276,7 +335,10 @@ impl Router {
     /// Get an error message
     pub fn get_error(&self, code: u16, reason: String) -> String {
         match self.errors.get(&code) {
-            Some(callback) => callback(code, reason),
+            Some(catch) => catch.execute(match error::MESSAGES.get(&code) {
+                Some(default) => default.to_string(),
+                _ => reason
+            }),
             _ => {
                 let mut response = error::default(code);
 
@@ -293,7 +355,7 @@ impl Router {
     /// Set an error handler
     ///
     /// Format of the callback is `(code, reason) -> formatted html`
-    pub fn set_error(&mut self, code: u16, callback: fn(u16, String) -> String) {
+    pub fn set_error(&mut self, code: u16, callback: Catch) {
         self.errors.insert(code, callback);
     }
 

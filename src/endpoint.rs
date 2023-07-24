@@ -71,3 +71,11 @@ pub trait Endpoint: Debug + Sync + Send {
         launchpad_uri::props(&uri, &self.path())
     }
 }
+
+pub trait ErrorCatch: Debug + Sync + Send {
+    fn execute(
+        &self,
+        message: String,
+    ) -> String ;
+    fn code(&self) -> u16;
+}
