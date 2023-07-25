@@ -5,32 +5,11 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::{
     net::TcpListener,
-    sync::{
-        mpsc::{self, Sender},
-        oneshot,
-    },
+    sync::mpsc::{self, Sender},
 };
 
-use super::{
-    router::{Route, Router},
-    support::TokioIo,
-    handler::RouteHandler
-};
-
-/// Commands sent through channel to router
-#[derive(Debug)]
-pub(crate) enum Command {
-    Get {
-        method: Method,
-        path: String,
-        response: oneshot::Sender<Option<Route>>,
-    },
-    Error {
-        code: u16,
-        reason: String,
-        response: oneshot::Sender<String>,
-    },
-}
+use super::support::TokioIo;
+use launchpad_router::{Command, RouteHandler, Router};
 
 /// Async server object that handles requests
 ///
@@ -126,7 +105,7 @@ impl Server {
         tx
     }
 
-    /// Prints the cli banner for when the server starts 
+    /// Prints the cli banner for when the server starts
     fn cli_banner(&self, addr: &SocketAddr) {
         let message = "http://";
         let fill = (0..addr.to_string().len() + message.len() + 16)
@@ -162,7 +141,7 @@ impl Server {
 
         // Start server
         let listener = TcpListener::bind(addr.clone()).await.unwrap();
-        // Start router channel/listener and get a handle to it 
+        // Start router channel/listener and get a handle to it
         let tx = self.serve_routes();
 
         // CLI log to indicate server is up
@@ -215,7 +194,7 @@ pub trait IntoSocket {
     fn into_socket(self) -> SocketAddr;
 }
 
-impl IntoSocket for ([u8;4], u16) {
+impl IntoSocket for ([u8; 4], u16) {
     fn into_socket(self) -> SocketAddr {
         SocketAddr::from(self)
     }

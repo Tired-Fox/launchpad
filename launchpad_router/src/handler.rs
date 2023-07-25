@@ -1,12 +1,10 @@
-use std::{path::PathBuf, convert::Infallible, fs};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
-use hyper::{Method, Uri, HeaderMap, http::HeaderValue};
-use tokio::sync::{oneshot, mpsc::Sender};
+use hyper::{http::HeaderValue, HeaderMap, Method, Uri};
+use std::{convert::Infallible, fs, path::PathBuf};
+use tokio::sync::{mpsc::Sender, oneshot};
 
-use crate::{Response, ROOT};
-
-use super::server::Command;
+use super::{Command, Response, ROOT};
 
 /// Ensure there is a meta charset=utf-8 tag in the html response. If not inject it.
 fn format_body(body: String) -> String {
@@ -85,29 +83,21 @@ macro_rules! error {
 /// Route handler that will parse a request and serve either a file or endpoint
 ///
 /// If the file or endpoint is not found then it will respond with a 404 not found
-pub(crate) struct RouteHandler(Sender<Command>);
+pub struct RouteHandler(Sender<Command>);
 impl RouteHandler {
     pub fn new(router: Sender<Command>) -> Self {
         RouteHandler(router)
     }
 
     /// Formats and builds the debug details element on the error page
-    fn format_request_debug(
-        message: String,
-        method: &hyper::Method,
-        uri: &hyper::Uri,
-        body: &Bytes,
-    ) -> String {
+    fn format_request_debug(message: String, method: &hyper::Method, uri: &hyper::Uri) -> String {
         format!(
             r#"<pre>
     {}
-        <em>Request: <strong>{} → '{}</strong>'</em>
-        <em>Body: <strong>{}</strong></em>
+        <em>Method: <strong>{}</strong></em>
+        <em>Uri: <strong>'{}'</strong></em>
     </pre>"#,
-            message,
-            method,
-            uri,
-            String::from_utf8(body.to_vec()).unwrap()
+            message, method, uri,
         )
     }
 
@@ -121,9 +111,7 @@ impl RouteHandler {
         path: PathBuf,
         uri: Uri,
         method: Method,
-        body: Bytes
-    ) -> hyper::Response<Full<Bytes>>  {
-
+    ) -> hyper::Response<Full<Bytes>> {
         if !path.is_file() {
             if path.to_str().unwrap().ends_with("html") {
                 let (resp_tx, resp_rx) = oneshot::channel();
@@ -134,7 +122,6 @@ impl RouteHandler {
                             format!("Could not find file {:?}", path.to_string_lossy()),
                             &method,
                             &uri,
-                            &body,
                         ),
                         response: resp_tx,
                     })
@@ -165,9 +152,8 @@ impl RouteHandler {
         uri: Uri,
         headers: HeaderMap<HeaderValue>,
         method: Method,
-        body: Bytes
+        body: Bytes,
     ) -> hyper::Response<Full<Bytes>> {
-
         // Get route/endpoint from router
         let (resp_tx, resp_rx) = oneshot::channel();
         self.router()
@@ -200,7 +186,6 @@ impl RouteHandler {
                                 },
                                 &method,
                                 &uri,
-                                &body,
                             ),
                             response: resp_tx,
                         })
@@ -231,7 +216,6 @@ impl RouteHandler {
                             ),
                             &method,
                             &uri,
-                            &body
                         ),
                         response: resp_tx,
                     })
@@ -247,7 +231,6 @@ impl RouteHandler {
         &self,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
-
         // Contruct path to match against
         let mut path = req.uri().path().to_string();
         if path.ends_with("/") {
@@ -264,22 +247,16 @@ impl RouteHandler {
         // Serve endpoint or a file
         let response = match path_buff.extension() {
             None => {
-                self.handle_endpoint(
-                    path.clone(),
-                    path_buff,
-                    uri,
-                    headers,
-                    method.clone(),
-                    body
-                ).await
+                self.handle_endpoint(path.clone(), path_buff, uri, headers, method.clone(), body)
+                    .await
             }
             Some(_) => {
                 self.handle_file(
                     PathBuf::from(format!("{}{}", ROOT, path)),
                     uri,
                     method.clone(),
-                    body
-                ).await
+                )
+                .await
             }
         };
 

@@ -1,5 +1,5 @@
 extern crate launchpad;
-use launchpad::{prelude::*, response::{HTML, File}, Result, Error};
+use launchpad::{prelude::*, response::{HTML, File}};
 
 pub mod api;
 
@@ -21,7 +21,7 @@ pub fn error_page() -> Result<HTML<&'static str>> {
  */
 #[catch(404)]
 pub fn not_found(code: u16, message: String) -> String {
-    format!(r#"
+    format!("
 <html>
     <head>
         <title>{0} {1}</title>
@@ -29,9 +29,26 @@ pub fn not_found(code: u16, message: String) -> String {
     <body>
         <h1>{0} {1}</h1>
         <p>Oops it looks like the page you are trying to reach doesn't exist</p>
-        <a href="/">Back to Home</a>
+        <a href=\"/\">Back to Home</a>
     </body>
-</html>"#,
+</html>",
+    code,
+    message)
+}
+
+#[catch]
+pub fn unexpected(code: u16, message: String) -> String {
+    format!("
+<html>
+    <head>
+        <title>{0} {1}</title>
+    </head>
+    <body>
+        <h1>{0} {1}</h1>
+        <p>An error occured, please try again.</p>
+        <a href=\"/\">Back to Home</a>
+    </body>
+</html>",
     code,
     message)
 }

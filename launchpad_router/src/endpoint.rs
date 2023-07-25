@@ -6,9 +6,6 @@ use crate::Error;
 
 use super::Response;
 
-// PERF: Move to own file
-pub struct Context;
-
 /// Trait for anything that can be transformed into Bytes for a successfull
 /// hyper response.
 pub trait Responder {
@@ -67,15 +64,12 @@ pub trait Endpoint: Debug + Sync + Send {
     ) -> Response;
     fn path(&self) -> String;
     fn methods(&self) -> Vec<Method>;
-    fn props(&self, uri: String) -> HashMap<String, launchpad_uri::Prop> {
-        launchpad_uri::props(&uri, &self.path())
+    fn props(&self, uri: String) -> HashMap<String, launchpad_props::Prop> {
+        launchpad_props::props(&uri, &self.path())
     }
 }
 
 pub trait ErrorCatch: Debug + Sync + Send {
-    fn execute(
-        &self,
-        message: String,
-    ) -> String ;
+    fn execute(&self, code: u16, message: String) -> String;
     fn code(&self) -> u16;
 }

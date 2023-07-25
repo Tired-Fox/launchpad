@@ -1,5 +1,5 @@
 [package]
-name = "launchpad-uri"
+name = "launchpad-props"
 version = "0.1.0"
 edition = "2021"
 

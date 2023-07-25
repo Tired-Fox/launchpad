@@ -44,7 +44,7 @@ fn identify(prop: &(String, Type)) -> Identifier {
 fn in_request_module(segments: Vec<String>) -> bool {
     if segments.len() > 1 {
         let path = vec!["launchpad".to_string(), "request".to_string()];
-        let valid = &path[0+segments.len()-1..];
+        let valid = &path[0 + segments.len() - 1..];
         for i in 0..valid.len() {
             if valid[i] != segments[i] {
                 return false;
@@ -58,10 +58,13 @@ fn get_request_param(prop: &Type, name: &str, referenced: bool) -> Option<(bool,
     let (mutable, path) = match referenced {
         true => {
             if let Type::Reference(r) = prop {
-                (r.mutability.is_some(), match &*r.elem {
-                    Type::Path(path) => path,
-                    _ => return None
-                })
+                (
+                    r.mutability.is_some(),
+                    match &*r.elem {
+                        Type::Path(path) => path,
+                        _ => return None,
+                    },
+                )
             } else {
                 if let Type::Path(path) = prop {
                     if let Some(seg) = path.path.segments.last() {
@@ -72,7 +75,7 @@ fn get_request_param(prop: &Type, name: &str, referenced: bool) -> Option<(bool,
                 }
                 return None;
             }
-        },
+        }
         false => {
             if let Type::Reference(r) = prop {
                 if let Type::Path(path) = &*r.elem {
@@ -86,16 +89,21 @@ fn get_request_param(prop: &Type, name: &str, referenced: bool) -> Option<(bool,
             } else if let Type::Path(path) = prop {
                 (false, path)
             } else {
-                return None
+                return None;
             }
         }
     };
 
-    let segments = path.path.segments.iter().map(|s| s.ident.to_string()).collect::<Vec<String>>();
+    let segments = path
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect::<Vec<String>>();
     if let Some(seg) = path.path.segments.last() {
         if !in_request_module(segments) {
             // Not a launchpad State
-            return None
+            return None;
         }
 
         if seg.ident.to_string() == name.to_string() {
@@ -113,10 +121,7 @@ fn get_request_param(prop: &Type, name: &str, referenced: bool) -> Option<(bool,
                 _ => abort!(prop, "Expected generic type"),
             };
 
-            return Some((
-                mutable,
-                elem,
-            ));
+            return Some((mutable, elem));
         }
     }
     None
@@ -289,9 +294,9 @@ pub fn compile_props(function: &ItemFn, include_data: &bool) -> (PresentProps, T
                 _ => {
                     results.push("__query".to_string());
                     present.query = Some(quote! {
-                        let __query = match ::launchpad::request::Query::<#inner_type>::parse(uri) {
+                        let __query = match ::launchpad_router::request::Query::<#inner_type>::parse(uri) {
                             Ok(__q) => __q,
-                            Err(e) => return ::launchpad::Response::from(e)
+                            Err(e) => return ::launchpad_router::Response::from(e)
                         };
                     });
                 }
@@ -308,9 +313,9 @@ pub fn compile_props(function: &ItemFn, include_data: &bool) -> (PresentProps, T
 
                     results.push("__content".to_string());
                     present.content = Some(quote! {
-                        let __content = match ::launchpad::request::Content::<#inner_type>::parse(headers, body) {
+                        let __content = match ::launchpad_router::request::Content::<#inner_type>::parse(headers, body) {
                             Ok(__c) => __c,
-                            Err(e) => return ::launchpad::Response::from(e)
+                            Err(e) => return ::launchpad_router::Response::from(e)
                         };
                     });
                 }

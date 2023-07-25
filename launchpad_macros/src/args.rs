@@ -1,4 +1,6 @@
-use syn::{bracketed, parse::Parse, punctuated::Punctuated, Ident, LitStr, Result, Token};
+use proc_macro2::Span;
+use proc_macro_error::abort;
+use syn::{bracketed, parse::Parse, punctuated::Punctuated, Ident, LitInt, LitStr, Result, Token};
 
 pub struct RequestArgs {
     pub path: Option<LitStr>,
@@ -41,5 +43,32 @@ impl Parse for RequestArgs {
         }
 
         Ok(RequestArgs { path, methods })
+    }
+}
+
+pub(crate) struct CatchArgs {
+    pub code: syn::LitInt,
+}
+
+impl Parse for CatchArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        if input.is_empty() {
+            return Ok(CatchArgs {
+                code: LitInt::new("0", Span::call_site()),
+            });
+        }
+
+        let code = match input.parse::<LitInt>() {
+            Ok(c) => c,
+            _ => match input.parse::<Ident>() {
+                Ok(c) if c.to_string().as_str() == "all" => LitInt::new("0", Span::call_site()),
+                _ => abort!(
+                    input.span(),
+                    "Expected single u16 or `all` identifier argument"
+                ),
+            },
+        };
+
+        Ok(CatchArgs { code })
     }
 }

@@ -1,17 +1,15 @@
+use super::{Error, Responder, Result, ROOT};
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, fs, path::PathBuf};
-
-use serde::{Serialize, Deserialize};
-
-use crate::{endpoint::Responder, Error, Result, ROOT};
 
 pub struct JSON<T: Sized + Serialize>(pub T);
 
-impl <'a, T: Sized + Serialize + Deserialize<'a>> JSON<T> {
+impl<'a, T: Sized + Serialize + Deserialize<'a>> JSON<T> {
     pub fn parse<Str: ToString>(value: Str) -> Result<JSON<T>> {
         let value = value.try_to_string()?;
         match serde_json::from_str(Box::leak(value.into_boxed_str())) {
             Ok(result) => Ok(JSON(result)),
-            Err(err) => Error::of(500, format!("Failed to deserialize json: {}", err))
+            Err(err) => Error::of(500, format!("Failed to deserialize json: {}", err)),
         }
     }
 }
@@ -36,7 +34,6 @@ impl<T: Sized + Serialize> Responder for JSON<T> {
         }
     }
 }
-
 
 pub struct HTML<T: ToString>(T);
 impl<T: ToString> From<T> for HTML<T> {

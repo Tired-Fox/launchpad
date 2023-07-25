@@ -17,6 +17,8 @@
 
 Rust based web design :smile:
 
+Construct endpoints or error handlers like so.
+
 ```rust
 #[get("/")]
 fn home() -> Result<&'static str> {
@@ -25,11 +27,81 @@ fn home() -> Result<&'static str> {
 ```
 
 ```rust
-#[post("/")]
-fn home(#[data] login: &str, #[data] age: i32) -> Result<&'static str> {
-  Ok("Hello, world!")
+#[post("/login/<username>/<age: int>")]
+fn data(login: &str, age: i32) -> Result<HTML<&'static str>> {
+  HTML::of("<h1>Hello, world!</h1>")
 }
 ```
+
+```rust
+#[catch(404)]
+fn not_found(code: u16, message: String) -> String {
+  format!("<h1>{} {}</h1>", code, message)
+}
+```
+
+Run an app like so.
+```rust
+use launchpad::{rts, Server};
+
+#[tokio::main]
+asyn fn main() {
+  Server::new()
+      .router(rts!{
+          [ home, data ],
+          catch { not_found }
+      })
+      .serve(3000)
+      .await;
+}
+```
+
+[typed-html](https://crates.io/crates/typed-html/0.2.2) for html macro inspiration
+
+Plan for RTX (JSX).
+```rust
+  rtx! {
+    <html lang="en">
+      <head>
+        <title>Something</title>
+      </head>
+      ... etc
+    </html>
+  }
+```
+
+With components able to do things like
+```rust
+#[component]
+fn Sample(cx: Context) -> Element {
+  let p1 = "prop 1";
+  let p3 = "prop 3";
+
+  rtx! {
+    <Title>Inject into head</Title>
+    <div>
+      <OtherComponent p1 p2=p3 />
+    </div>
+  }
+}
+```
+
+Has components like:
+```rust
+rtx!{
+  <Router>
+    <Route href="/sample">
+      <Sample />
+    </Route>
+    <Route href="/">
+      <Home />
+    </Route>
+  </Router>
+}
+```
+
+Uses the above http server handler but now has the ability to serve wasm based
+components.
 
 <!-- Footer Badges --!>
 

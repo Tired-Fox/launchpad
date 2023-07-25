@@ -3,13 +3,12 @@ use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{ItemFn, Visibility};
 
-mod args;
-mod props;
 mod methods;
+mod props;
 
-pub use args::RequestArgs;
-use props::compile_props;
 use self::methods::build_method_comment_list;
+pub use super::args::RequestArgs;
+use props::compile_props;
 
 use super::docs::compile_docs;
 use methods::compile_methods_vec;
@@ -22,7 +21,7 @@ macro_rules! request_expand {
         ///
         /// # Example
         /// ```
-        /// use launchpad::prelude::*;
+        /// use launchpad_router::prelude::*;
         ///
         /// #[get("/")]
         /// fn index() -> Result<&'static str> {
@@ -71,11 +70,14 @@ pub fn build_endpoint(args: RequestArgs, mut function: ItemFn, include_data: boo
     let name = function.sig.ident.clone();
     let (present, props) = compile_props(&function, &include_data);
     let methods = compile_methods_vec(&args);
-    let docs = format!("#[doc=\"{} endpoint for `{}`\n\n{}\"]", 
+    let docs = format!(
+        "#[doc=\"{} endpoint for `{}`\n\n{}\"]",
         build_method_comment_list(&args),
         uri,
         compile_docs(&mut function)
-    ).parse::<TokenStream2>().unwrap();
+    )
+    .parse::<TokenStream2>()
+    .unwrap();
     let visibility = function.vis.clone();
 
     update_function(&mut function);
@@ -83,7 +85,7 @@ pub fn build_endpoint(args: RequestArgs, mut function: ItemFn, include_data: boo
     // Construct special endpoint props
     let state_type = match present.state {
         Some(ts) => ts,
-        _ => quote!(::launchpad::request::Empty),
+        _ => quote!(::launchpad_router::request::Empty),
     };
     let content_local = match present.content {
         Some(ts) => ts,
@@ -99,10 +101,10 @@ pub fn build_endpoint(args: RequestArgs, mut function: ItemFn, include_data: boo
         #docs
         #[derive(Debug)]
         #[allow(non_camel_case_types)]
-        #visibility struct #name(pub std::sync::Mutex<::launchpad::request::State<#state_type>>);
+        #visibility struct #name(pub std::sync::Mutex<::launchpad_router::request::State<#state_type>>);
 
         #[allow(non_camel_case_types)]
-        impl ::launchpad::endpoint::Endpoint for #name {
+        impl ::launchpad_router::endpoint::Endpoint for #name {
             #[inline]
             fn methods(&self) -> Vec<hyper::Method> {
                 #methods
@@ -113,23 +115,22 @@ pub fn build_endpoint(args: RequestArgs, mut function: ItemFn, include_data: boo
                 String::from(#path)
             }
 
-            #[inline]
             fn execute(
                  &self,
                  uri: &hyper::Uri,
                  headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
                  body: &bytes::Bytes
-            ) -> ::launchpad::Response {
+            ) -> ::launchpad_router::Response {
                 #function
 
                 let mut __lock_state = self.0.lock().unwrap();
-                let mut __props = ::launchpad_uri::props(&uri.path(), &self.path());
+                let mut __props = ::launchpad_props::props(&uri.path(), &self.path());
                 #content_local
                 #query_local
 
                 match __endpoint(#props) {
-                    Ok(__data) => ::launchpad::Response::from(__data),
-                    Err(__error) => ::launchpad::Response::from(::launchpad::Error::from(__error)),
+                    Ok(__data) => ::launchpad_router::Response::from(__data),
+                    Err(__error) => ::launchpad_router::Response::from(::launchpad_router::Error::from(__error)),
                 }
             }
         }

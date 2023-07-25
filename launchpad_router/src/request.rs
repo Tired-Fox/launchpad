@@ -2,9 +2,7 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, marker::PhantomData};
 
-use crate::{Error, Result};
-
-use super::response::JSON;
+use super::{response::JSON, Error, Result};
 
 /// Placeholder state context
 #[derive(Debug, Default)]
@@ -93,14 +91,15 @@ impl<T: Default + Debug> Default for State<T> {
 pub struct Plain(pub String);
 impl<'de> Deserialize<'de> for Plain {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-        where
-            D: serde::Deserializer<'de> {
+    where
+        D: serde::Deserializer<'de>,
+    {
         let input = String::deserialize(deserializer)?;
         Ok(Plain(input))
     }
 }
 
-/// A request content/body/data parser 
+/// A request content/body/data parser
 ///
 /// This object, given a struct, will parse the request body
 /// into the provided struct that implements Default and serde::Deserialize.
@@ -116,17 +115,21 @@ impl<'de> Deserialize<'de> for Plain {
 ///
 /// #[get]
 /// fn hello_world(content: Data<ExampleData>) -> Result<String> {
-///     return content.get_ref().name 
+///     return content.get_ref().name
 /// }
 /// ```
 pub struct Content<'a, T: Sized + Serialize + Deserialize<'a>>(T, PhantomData<&'a T>);
 
-impl<'a, T:  Sized + Serialize + Deserialize<'a>> Content<'a, T> {
+impl<'a, T: Sized + Serialize + Deserialize<'a>> Content<'a, T> {
     pub fn parse(
         headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
         body: &Bytes,
     ) -> Result<Content<'a, T>> {
-        let data: &str = Box::leak(String::from_utf8(body.to_vec().clone()).unwrap().into_boxed_str());
+        let data: &str = Box::leak(
+            String::from_utf8(body.to_vec().clone())
+                .unwrap()
+                .into_boxed_str(),
+        );
 
         match headers.get("Content-Type") {
             Some(ctype) => {
@@ -135,20 +138,29 @@ impl<'a, T:  Sized + Serialize + Deserialize<'a>> Content<'a, T> {
                     JSON::<T>::parse(data).map(|json| json.0)
                 // Text plain or octet stream are parsed into primitive types
                 // PERF: Better handling of octet-stream
-                } else if ctype.starts_with("text/") || ctype.starts_with("application/octet-stream") {
-                    serde_plain::from_str::<T>(data).map_err(
-                        |_| Error::new(
+                } else if ctype.starts_with("text/")
+                    || ctype.starts_with("application/octet-stream")
+                {
+                    serde_plain::from_str::<T>(data).map_err(|_| {
+                        Error::new(
                             500,
-                            format!("Failed to deserialize text/plain into '{}'", std::any::type_name::<T>())
+                            format!(
+                                "Failed to deserialize text/plain into '{}'",
+                                std::any::type_name::<T>()
+                            ),
                         )
-                    )
+                    })
                 // TODO: Support for other popular types behind feature flags
                 } else {
-                    Error::of(500, format!("Could not parse data from content type: {:?}", ctype))
+                    Error::of(
+                        500,
+                        format!("Could not parse data from content type: {:?}", ctype),
+                    )
                 }
             }
             None => Error::of(500, "Unkown Content-Type: application/octet-stream"),
-        }.map(|r| Content(r, PhantomData))
+        }
+        .map(|r| Content(r, PhantomData))
     }
 
     pub fn get_ref(&self) -> &T {
@@ -156,9 +168,9 @@ impl<'a, T:  Sized + Serialize + Deserialize<'a>> Content<'a, T> {
     }
 }
 
-/// A request query parser 
+/// A request query parser
 ///
-/// This object, given a struct, will parse the request url query 
+/// This object, given a struct, will parse the request url query
 /// into the provided struct that implements Default and serde::Deserialize.
 ///
 /// # Example
@@ -172,23 +184,19 @@ impl<'a, T:  Sized + Serialize + Deserialize<'a>> Content<'a, T> {
 ///
 /// #[get]
 /// fn hello_world(query: Query<ExampleQuery>) -> Result<String> {
-///     return content.get_ref().name 
+///     return content.get_ref().name
 /// }
 /// ```
 pub struct Query<'a, T: Default + Deserialize<'a>>(T, PhantomData<&'a T>);
 
 impl<'a, T: Default + Deserialize<'a>> Query<'a, T> {
-    pub fn parse(
-        uri: &'a hyper::Uri
-    ) -> Result<Query<'a, T>> {
+    pub fn parse(uri: &'a hyper::Uri) -> Result<Query<'a, T>> {
         match uri.query() {
-            Some(query) => {
-                match serde_qs::from_str::<T>(query) {
-                    Ok(query) => Ok(Query(query, PhantomData)),
-                    Err(error) => Error::of(500, format!("Failed to parse request query: {}", error))
-                }
+            Some(query) => match serde_qs::from_str::<T>(query) {
+                Ok(query) => Ok(Query(query, PhantomData)),
+                Err(error) => Error::of(500, format!("Failed to parse request query: {}", error)),
             },
-            None => Ok(Query(T::default(), PhantomData))
+            None => Ok(Query(T::default(), PhantomData)),
         }
     }
 

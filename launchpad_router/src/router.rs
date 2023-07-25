@@ -1,9 +1,8 @@
+use hyper::Method;
 use std::{collections::HashMap, fmt::Display, sync::Arc};
 
-use hyper::Method;
-
 use super::endpoint::{Endpoint, ErrorCatch};
-
+use tokio::sync::oneshot;
 
 pub mod error {
     use phf::phf_map;
@@ -14,7 +13,7 @@ pub mod error {
         101u16 => "Switching protocols",
         102u16 => "Processing",
         103u16 => "Early Hints",
-    
+
         200u16 => "OK",
         201u16 => "Created",
         202u16 => "Accepted",
@@ -25,7 +24,7 @@ pub mod error {
         207u16 => "Multi-Status",
         208u16 => "Already Reported",
         226u16 => "IM Used",
-    
+
         300u16 => "Multiple Choices",
         301u16 => "Moved Permanently",
         302u16 => "Found (Previously \"Moved Temporarily\")",
@@ -35,7 +34,7 @@ pub mod error {
         306u16 => "Switch Proxy",
         307u16 => "Temporary Redirect",
         308u16 => "Permanent Redirect",
-    
+
         400u16 => "Bad Request",
         401u16 => "Unauthorized",
         402u16 => "Payment Required",
@@ -65,7 +64,7 @@ pub mod error {
         429u16 => "Too Many Requests",
         431u16 => "Request Header Fields Too Large",
         451u16 => "Unavailable For Legal Reasons",
-    
+
         500u16 => "Internal Server Error",
         501u16 => "Not Implemented",
         502u16 => "Bad Gateway",
@@ -80,7 +79,8 @@ pub mod error {
     };
 
     pub fn details(reason: String) -> String {
-        format!(r#"
+        format!(
+            r#"
 <style>
     details summary {{cursor: pointer;}}
     details summary > * {{display: inline;}}
@@ -93,7 +93,9 @@ pub mod error {
 <details>
     <summary>Reason</summary>
     <div id="body">{}</div>
-</details>"#, reason)
+</details>"#,
+            reason
+        )
     }
 
     pub fn default(code: u16) -> String {
@@ -102,65 +104,14 @@ pub mod error {
             _ => String::new(),
         };
 
-        format!(r#"
+        format!(
+            r#"
 <h1 style="text-align: center">{} {}</h1>
 <div style="border-top: 1px solid black; margin-inline: 2rem"></div>"#,
-        code, message)
+            code, message
+        )
     }
 }
-
-/// Construct a router given a list of routes
-///
-/// # Example
-///
-/// Assume that the following method is in both examples
-/// ```
-/// #[get("/")]
-/// fn home() -> Result<&'static str> {
-///     Ok("Hello, world!")
-/// }
-/// ```
-///
-/// `rts!` can be used like the `vec!` macro
-/// ```
-/// use launchpad::prelude::*;
-///
-/// let router = rts![home]
-/// ```
-///
-/// If you want to specify the `route/uri` for the endpoint in the macro you can
-/// use it similar to a map macro.
-/// ```
-/// use launchpad::prelude::*;
-///
-/// let router = rts!{
-///     "/": home
-/// }
-/// ```
-// #[macro_export]
-// macro_rules! rts{
-//     { $($path: literal => $endpoint: ident),* $(,)?} => {
-//         $crate::Router::from([
-//             $(
-//                 $crate::router::Route::new(
-//                     $path,
-//                     std::sync::Arc::new($endpoint(std::sync::Mutex::new($crate::request::State::default())))
-//                 ),
-//             )*
-//         ])
-//     };
-//     [ $($endpoint: ident),* $(,)?] => {
-//         $crate::Router::from([
-//             $(
-//                 $crate::router::Route::from_endpoint(
-//                     std::sync::Arc::new(
-//                         $endpoint( std::sync::Mutex::new($crate::request::State::default()) )
-//                     )
-//                 ),
-//             )*
-//         ])
-//     };
-// }
 
 /// A constructed and initialized error that is linked to a error handler
 #[derive(Debug, Clone)]
@@ -179,8 +130,8 @@ impl Catch {
         &self.0
     }
 
-    pub fn execute(&self, message: String) -> String {
-        self.1.execute(message)
+    pub fn execute(&self, code: u16, message: String) -> String {
+        self.1.execute(code, message)
     }
 }
 
@@ -249,24 +200,21 @@ pub struct Router {
     errors: HashMap<u16, Catch>,
 }
 
-// <HEAP> [hello("/api/name/<first>/<last>"), world("/api/<...path>/help")] <- endpoints
-//
-// <routes: HashMap>
-//  hyper::Method::GET <- [*hello, *world]
-//  hyper::Method::POST <- [*world]
-//
-// GET "/api/name/<first>/<last>"
-//  - routes.get(hyper::Method::GET) <- [*hello, *world]
-//  - [*hello, *world].iter() <- Compare uri for closest match first
-//      - Exact same Length
-//      - Matching literals
-//      - Ranked from best match to worst match
-
 impl<const SIZE: usize> From<[Route; SIZE]> for Router {
     fn from(value: [Route; SIZE]) -> Self {
         let mut router = Router::new();
         for val in value {
             router.set_route(val.path().clone(), val)
+        }
+        router
+    }
+}
+
+impl<const SIZE: usize> From<[Catch; SIZE]> for Router {
+    fn from(value: [Catch; SIZE]) -> Self {
+        let mut router = Router::new();
+        for val in value {
+            router.set_error(val.code().clone(), val)
         }
         router
     }
@@ -281,16 +229,6 @@ impl<const ROUTES: usize, const ERRORS: usize> From<([Route; ROUTES], [Catch; ER
 
         for error in value.1 {
             router.set_error(error.code().clone(), error)
-        }
-        router
-    }
-}
-
-impl<const SIZE: usize> From<[Catch; SIZE]> for Router {
-    fn from(value: [Catch; SIZE]) -> Self {
-        let mut router = Router::new();
-        for val in value {
-            router.set_error(val.code().clone(), val)
         }
         router
     }
@@ -320,34 +258,43 @@ impl Router {
 
     /// Get an endpoint that best matches the request
     pub fn get_route<S: Display>(&self, method: Method, path: S) -> Option<&Route> {
-        // TODO: use new uri matching
         let path = path.to_string();
 
         match self.routes.get(&method) {
             Some(bucket) => {
-                let result = launchpad_uri::find(&path, &bucket, |s| s.path().clone());
+                let result = launchpad_props::find(&path, &bucket, |s| s.path().clone());
                 result
-            },
+            }
             _ => None,
         }
     }
 
-    /// Get an error message
+    /// Get an error page response
     pub fn get_error(&self, code: u16, reason: String) -> String {
+        let message = match error::MESSAGES.get(&code) {
+            Some(default) => default.to_string(),
+            _ => reason.clone(),
+        };
+
+        // Check for user defined error handler
         match self.errors.get(&code) {
-            Some(catch) => catch.execute(match error::MESSAGES.get(&code) {
-                Some(default) => default.to_string(),
-                _ => reason
-            }),
+            Some(catch) => catch.execute(code, message),
             _ => {
-                let mut response = error::default(code);
+                // Check for default user defined error handler
+                match self.errors.get(&0) {
+                    Some(catch) => catch.execute(code, message),
+                    // Default error page
+                    _ => {
+                        let mut response = error::default(code);
 
-                #[cfg(debug_assertions)]
-                if reason != String::new() {
-                    response.push_str(error::details(reason).as_str());
+                        #[cfg(debug_assertions)]
+                        if reason != String::new() {
+                            response.push_str(error::details(reason).as_str());
+                        }
+
+                        response
+                    }
                 }
-
-                response
             }
         }
     }
@@ -376,12 +323,24 @@ impl Router {
                 }
                 None => {
                     self.routes.insert(method.clone(), Vec::new());
-                    self.routes
-                        .get_mut(&method)
-                        .unwrap()
-                        .push(req.clone());
+                    self.routes.get_mut(&method).unwrap().push(req.clone());
                 }
             }
         }
     }
+}
+
+/// Commands sent through channel to router
+#[derive(Debug)]
+pub enum Command {
+    Get {
+        method: Method,
+        path: String,
+        response: oneshot::Sender<Option<Route>>,
+    },
+    Error {
+        code: u16,
+        reason: String,
+        response: oneshot::Sender<String>,
+    },
 }

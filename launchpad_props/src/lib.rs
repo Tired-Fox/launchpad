@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt::{Display, Debug}};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+};
 
 pub fn split<StrLike: Display>(uri: StrLike) -> Vec<String> {
     let mut uri = uri.to_string();
@@ -151,7 +154,9 @@ pub fn compare<S: Display, P: Display>(uri: &S, pattern: &P) -> Match {
                                     None => return Match::Discard,
                                 }
                             } else {
-                                panic!("Expected path capture to have a normal segment following it")
+                                panic!(
+                                    "Expected path capture to have a normal segment following it"
+                                )
                             }
                         } else {
                             match Prop::parse(&(uri[u..]).join("/"), &ctype) {
@@ -201,7 +206,7 @@ pub fn props<S: Display, P: Display>(uri: &S, pattern: &P) -> HashMap<String, Pr
     match compare(&uri, &pattern) {
         Match::Full(_, props) => props,
         Match::Partial(_, props) => props,
-        _ => HashMap::new()
+        _ => HashMap::new(),
     }
 }
 
@@ -209,8 +214,10 @@ pub fn parse_props<P: Display>(pattern: &P) -> HashMap<String, CType> {
     let mut props = HashMap::new();
     for token in Token::parse(&pattern).iter() {
         match token {
-            Token::Capture(name, ctype) => {props.insert(name.clone(), ctype.clone());},
-            _ => ()
+            Token::Capture(name, ctype) => {
+                props.insert(name.clone(), ctype.clone());
+            }
+            _ => (),
         };
     }
     props
@@ -227,7 +234,7 @@ impl From<Prop> for String {
     fn from(value: Prop) -> Self {
         match value {
             Prop::Any(v) | Prop::String(v) | Prop::Path(v) => v,
-            _ => panic!("{:?} can not be converted to String", value)
+            _ => panic!("{:?} can not be converted to String", value),
         }
     }
 }
@@ -236,7 +243,7 @@ impl From<Prop> for &str {
     fn from(value: Prop) -> Self {
         match value {
             Prop::Any(v) | Prop::String(v) | Prop::Path(v) => Box::leak(v.clone().into_boxed_str()),
-            _ => panic!("{:?} can not be converted to String", value)
+            _ => panic!("{:?} can not be converted to String", value),
         }
     }
 }
@@ -245,7 +252,7 @@ impl From<Prop> for i32 {
     fn from(value: Prop) -> Self {
         match value {
             Prop::Int(i) => i,
-            _ => panic!("{:?} can not be converted to i32", value)
+            _ => panic!("{:?} can not be converted to i32", value),
         }
     }
 }
@@ -255,39 +262,37 @@ pub fn index(uri: &String, routes: &Vec<String>) -> Option<usize> {
     let mut full: Option<(u8, usize)> = None;
     for (i, pattern) in routes.iter().enumerate() {
         match compare(uri, pattern) {
-            Match::Full(exact, _) => {
-                match &full {
-                    Some((e, _)) => {
-                        if e < &exact {
-                            full = Some((exact, i))
-                        }
-                    },
-                    None => {
+            Match::Full(exact, _) => match &full {
+                Some((e, _)) => {
+                    if e < &exact {
                         full = Some((exact, i))
                     }
                 }
-            }
+                None => full = Some((exact, i)),
+            },
             Match::Partial(rank, _) => {
                 ranks.push((rank, i));
             }
-            _ => ()
+            _ => (),
         }
     }
     ranks.sort_by(|f, s| (s.1 as u8).cmp(&(f.1 as u8)));
 
     match full {
-        Some((_e, index)) => {
-            Some(index)
-        }
-        None if ranks.len() > 0 => {
-            Some(ranks[0].1)
-        }
+        Some((_e, index)) => Some(index),
+        None if ranks.len() > 0 => Some(ranks[0].1),
         _ => None,
     }
-
 }
 
-pub fn find<'a, T: Debug, StrLike: Display>(uri: &StrLike, routes: &'a Vec<T>, map: fn(&T) -> String) -> Option<&'a T> {
-    index(&uri.to_string(), &routes.iter().map(map).collect::<Vec<String>>()).map(|index| &routes[index])
+pub fn find<'a, T: Debug, StrLike: Display>(
+    uri: &StrLike,
+    routes: &'a Vec<T>,
+    map: fn(&T) -> String,
+) -> Option<&'a T> {
+    index(
+        &uri.to_string(),
+        &routes.iter().map(map).collect::<Vec<String>>(),
+    )
+    .map(|index| &routes[index])
 }
-

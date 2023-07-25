@@ -17,9 +17,13 @@ pub(crate) fn compile_methods_vec(args: &RequestArgs) -> TokenStream {
 }
 
 pub(crate) fn build_method_comment_list(args: &RequestArgs) -> String {
-    let methods = args.methods.iter().map(|m| format!("`{}`", m)).collect::<Vec<String>>();
+    let methods = args
+        .methods
+        .iter()
+        .map(|m| format!("`{}`", m))
+        .collect::<Vec<String>>();
     if args.methods.len() > 2 {
-        let mut result = (&methods[0..methods.len()-1]).join(", ");
+        let mut result = (&methods[0..methods.len() - 1]).join(", ");
         result.push_str(format!("and {}", methods.last().unwrap()).as_str());
         result
     } else if args.methods.len() == 2 {
