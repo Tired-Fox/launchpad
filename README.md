@@ -57,6 +57,7 @@ asyn fn main() {
 ```
 
 [typed-html](https://crates.io/crates/typed-html/0.2.2) for html macro inspiration
+[html-to-string-macro](https://docs.rs/html-to-string-macro/latest/src/html_to_string_macro/lib.rs.html#96-105) for inspiration
 
 Plan for RTX (JSX).
 ```rust
