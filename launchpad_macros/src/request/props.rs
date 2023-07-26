@@ -294,9 +294,9 @@ pub fn compile_props(function: &ItemFn, include_data: &bool) -> (PresentProps, T
                 _ => {
                     results.push("__query".to_string());
                     present.query = Some(quote! {
-                        let __query = match ::launchpad_router::request::Query::<#inner_type>::parse(uri) {
+                        let __query = match ::launchpad::router::request::Query::<#inner_type>::parse(uri) {
                             Ok(__q) => __q,
-                            Err(e) => return ::launchpad_router::Response::from(e)
+                            Err(e) => return ::launchpad::router::Response::from(e)
                         };
                     });
                 }
@@ -313,9 +313,9 @@ pub fn compile_props(function: &ItemFn, include_data: &bool) -> (PresentProps, T
 
                     results.push("__content".to_string());
                     present.content = Some(quote! {
-                        let __content = match ::launchpad_router::request::Content::<#inner_type>::parse(headers, body) {
+                        let __content = match ::launchpad::router::request::Content::<#inner_type>::parse(headers, body) {
                             Ok(__c) => __c,
-                            Err(e) => return ::launchpad_router::Response::from(e)
+                            Err(e) => return ::launchpad::router::Response::from(e)
                         };
                     });
                 }

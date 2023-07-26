@@ -21,7 +21,7 @@ macro_rules! request_expand {
         ///
         /// # Example
         /// ```
-        /// use launchpad_router::prelude::*;
+        /// use launchpad::router::prelude::*;
         ///
         /// #[get("/")]
         /// fn index() -> Result<&'static str> {
@@ -85,7 +85,7 @@ pub fn build_endpoint(args: RequestArgs, mut function: ItemFn, include_data: boo
     // Construct special endpoint props
     let state_type = match present.state {
         Some(ts) => ts,
-        _ => quote!(::launchpad_router::request::Empty),
+        _ => quote!(::launchpad::router::request::Empty),
     };
     let content_local = match present.content {
         Some(ts) => ts,
@@ -101,10 +101,10 @@ pub fn build_endpoint(args: RequestArgs, mut function: ItemFn, include_data: boo
         #docs
         #[derive(Debug)]
         #[allow(non_camel_case_types)]
-        #visibility struct #name(pub std::sync::Mutex<::launchpad_router::request::State<#state_type>>);
+        #visibility struct #name(pub std::sync::Mutex<::launchpad::router::request::State<#state_type>>);
 
         #[allow(non_camel_case_types)]
-        impl ::launchpad_router::endpoint::Endpoint for #name {
+        impl ::launchpad::router::endpoint::Endpoint for #name {
             #[inline]
             fn methods(&self) -> Vec<hyper::Method> {
                 #methods
@@ -120,7 +120,7 @@ pub fn build_endpoint(args: RequestArgs, mut function: ItemFn, include_data: boo
                  uri: &hyper::Uri,
                  headers: &hyper::header::HeaderMap<hyper::header::HeaderValue>,
                  body: &bytes::Bytes
-            ) -> ::launchpad_router::Response {
+            ) -> ::launchpad::router::Response {
                 #function
 
                 let mut __lock_state = self.0.lock().unwrap();
@@ -128,10 +128,7 @@ pub fn build_endpoint(args: RequestArgs, mut function: ItemFn, include_data: boo
                 #content_local
                 #query_local
 
-                match __endpoint(#props) {
-                    Ok(__data) => ::launchpad_router::Response::from(__data),
-                    Err(__error) => ::launchpad_router::Response::from(::launchpad_router::Error::from(__error)),
-                }
+                ::launchpad::router::Response::from(__endpoint(#props))
             }
         }
     }

@@ -1,5 +1,5 @@
 extern crate launchpad;
-use launchpad::{prelude::*, response::HTML, Server};
+use launchpad::{prelude::*, router::response::HTML, Server};
 
 mod routes;
 use routes::{
@@ -9,7 +9,7 @@ use routes::{
 
 #[get("/test/<info>")]
 fn test(info: &str) -> Result<HTML<String>> {
-    HTML::of(html!{
+    HTML::ok(html! {
         <h1>"Test Page"</h1>
         <p>"Info: "{info}</p>
     })

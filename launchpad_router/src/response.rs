@@ -2,7 +2,16 @@ use super::{Error, Responder, Result, ROOT};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, fs, path::PathBuf};
 
+pub trait TryIntoResponse<T>: Sized {
+    fn try_response(value: T) -> Result<Self>;
+}
+
 pub struct JSON<T: Sized + Serialize>(pub T);
+impl<T: Sized + Serialize> TryIntoResponse<T> for JSON<T> {
+    fn try_response(value: T) -> Result<Self> {
+        Ok(JSON(value))
+    }
+}
 
 impl<'a, T: Sized + Serialize + Deserialize<'a>> JSON<T> {
     pub fn parse<Str: ToString>(value: Str) -> Result<JSON<T>> {
@@ -17,12 +26,6 @@ impl<'a, T: Sized + Serialize + Deserialize<'a>> JSON<T> {
 impl<T: Sized + Serialize> From<T> for JSON<T> {
     fn from(value: T) -> Self {
         JSON(value)
-    }
-}
-
-impl<T: Sized + Serialize> JSON<T> {
-    pub fn of(value: T) -> Result<JSON<T>> {
-        Ok(JSON::from(value))
     }
 }
 
@@ -42,9 +45,9 @@ impl<T: ToString> From<T> for HTML<T> {
     }
 }
 
-impl<T: ToString> HTML<T> {
-    pub fn of(value: T) -> Result<HTML<T>> {
-        Ok(HTML::from(value))
+impl<T: ToString> TryIntoResponse<T> for HTML<T> {
+    fn try_response(value: T) -> Result<Self> {
+        Ok(HTML(value))
     }
 }
 

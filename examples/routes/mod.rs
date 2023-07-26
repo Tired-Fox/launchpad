@@ -1,19 +1,19 @@
 extern crate launchpad;
 use launchpad::{
     prelude::*,
-    response::{File, HTML},
+    router::response::{File, HTML},
 };
 
 pub mod api;
 
 #[get("/")]
-pub fn index() -> Result<HTML<File>> {
-    HTML::of(File::from("index.html"))
+pub fn index() -> Result<File> {
+    File::ok("index.html")
 }
 
 #[get("/error")]
 pub fn error_page() -> Result<HTML<&'static str>> {
-    Error::of(500, "Custom user error response")
+    HTML::err(500, "Custom user error response")
 }
 
 /// Catch all endpoint for `404` not found error page

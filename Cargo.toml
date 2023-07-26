@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 launchpad-macros = { path = "launchpad_macros" }
 launchpad-props = { path = "launchpad_props" }
-launchpad-router = { path = "launchpad_router" }
 
 bytes = "1.4.0"
 tokio = { version = "1.29.1", features = ["full"] }

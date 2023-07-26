@@ -84,7 +84,7 @@ pub fn catch(args: TokenStream, function: TokenStream) -> TokenStream {
         #vis struct #name();
 
         #[allow(non_camel_case_types)]
-        impl ::launchpad_router::endpoint::ErrorCatch for #name {
+        impl ::launchpad::router::endpoint::ErrorCatch for #name {
             fn execute(&self, code: u16, message: String) -> String {
                 #function
 
@@ -94,6 +94,52 @@ pub fn catch(args: TokenStream, function: TokenStream) -> TokenStream {
             #[inline]
             fn code(&self) -> u16 {
                 #code
+            }
+        }
+    }
+    .into()
+}
+
+#[proc_macro]
+pub fn html(input: TokenStream) -> TokenStream {
+    let input: TokenStream2 = input.into();
+    quote! {
+        launchpad::response::HTML::of(html_to_string_macro::html! {
+            #input
+        })
+    }
+    .into()
+}
+
+// For testing wasm library
+#[proc_macro_attribute]
+pub fn main(_args: TokenStream, function: TokenStream) -> TokenStream {
+    let function = parse_macro_input!(function as ItemFn);
+
+    quote! {
+        cfg_if::cfg_if! {
+            if #[cfg(feature="client")] {
+                #[wasm_bindgen::prelude::wasm_bindgen(start)]
+                #function
+            } else if #[cfg(feature="server")] {
+                #function
+            } else {
+                fn main() {
+                    panic!("Cannot run launchpad main without `server` or `client` features")
+                }
+            }
+        }
+    }
+    .into()
+}
+
+#[proc_macro]
+pub fn client(capture: TokenStream) -> TokenStream {
+    let capture: TokenStream2 = capture.into();
+    quote! {
+        cfg_if::cfg_if! {
+            if #[cfg(feature="client")] {
+                #capture
             }
         }
     }

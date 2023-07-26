@@ -8,8 +8,10 @@ use tokio::{
     sync::mpsc::{self, Sender},
 };
 
-use super::support::TokioIo;
-use launchpad_router::{Command, RouteHandler, Router};
+use super::{
+    router::{Command, RouteHandler, Router},
+    support::TokioIo,
+};
 
 /// Async server object that handles requests
 ///

@@ -1,8 +1,11 @@
 extern crate launchpad;
+
 use launchpad::{
     prelude::*,
-    request::{Content, Query, State},
-    response::JSON,
+    router::{
+        request::{Content, Query, State},
+        response::JSON,
+    },
 };
 
 #[post("/api/plain")]
@@ -21,8 +24,11 @@ pub fn data(
     content: Content<HomeData>,
     query: Query<UserQuery>,
 ) -> Result<JSON<User>> {
-
-    println!("UserQuery: {}, {}", query.get_ref().name, query.get_ref().age);
+    println!(
+        "UserQuery: {}, {}",
+        query.get_ref().name,
+        query.get_ref().age
+    );
 
     if state.get_ref().name == String::new() {
         state.get_ref_mut().name = String::from("Zachary");
@@ -48,7 +54,7 @@ pub fn data(
     // ).as_str())
 
     // From a serializable struct
-    JSON::of(User {
+    JSON::ok(User {
         firstname,
         lastname,
         age: content.get_ref().age,
