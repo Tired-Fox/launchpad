@@ -109,6 +109,11 @@ components.
   - request wrapper - similar to what is written now
   - props - [leptos](https://leptos-rs.github.io/leptos/view/03_components.html?highlight=%23%5Bprops#into-props)
 
+**Branding to Spider Inspiration**
+- `Tangle` or `Cobweb`
+- `Orb-Weaver`
+- `Black-Widow`
+
 <!-- Footer Badges --!>
 
 <br>
