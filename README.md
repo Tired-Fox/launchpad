@@ -56,53 +56,58 @@ asyn fn main() {
 }
 ```
 
-[typed-html](https://crates.io/crates/typed-html/0.2.2) for html macro inspiration
-[html-to-string-macro](https://docs.rs/html-to-string-macro/latest/src/html_to_string_macro/lib.rs.html#96-105) for inspiration
-
-Plan for RTX (JSX).
-```rust
-  rtx! {
-    <html lang="en">
-      <head>
-        <title>Something</title>
-      </head>
-      ... etc
-    </html>
-  }
-```
-
-With components able to do things like
-```rust
-#[component]
-fn Sample(cx: Context) -> Element {
-  let p1 = "prop 1";
-  let p3 = "prop 3";
-
-  rtx! {
-    <Title>Inject into head</Title>
-    <div>
-      <OtherComponent p1 p2=p3 />
-    </div>
-  }
-}
-```
-
-Has components like:
-```rust
-rtx!{
-  <Router>
-    <Route href="/sample">
-      <Sample />
-    </Route>
-    <Route href="/">
-      <Home />
-    </Route>
-  </Router>
-}
-```
-
 Uses the above http server handler but now has the ability to serve wasm based
 components.
+
+## Goals for Rewrite:
+- [ ] Extractors
+- [ ] From / Into type of traits
+  - Complex param traits for optionals and parsing specific parts of request
+  - Response to allow for easy and complex return types close to native rust that are easy to use and give the most feedback and freedom as possible
+- [ ] From and Into traits for most objects
+  - The idea would be around things like `axum` extractor's
+  - User can just define a parameter and it will inject/convert
+  - Option varient is also viable and can be null if it fials
+  - Extractors also allow for finding out the content type
+    - JSON extractor will return an `application/json` content type
+    - HTML extractor will return a `text/html` content type
+    - etc...
+- [ ] Response is a Result that implements ToResponse
+- [ ] Failed response is a status code and optional user defined message
+- [ ] Parameter macros, method macros, and constructor macros
+- [ ] Built it timeout, throtteling, etc... with `Tower`
+- [ ] HTTP/1 and HTTP/2 Support
+
+**Inspiration**
+- [Axum](https://github.com/tokio-rs/axum)
+- [Actix](https://github.com/actix/actix-web)
+- [Warp](https://github.com/seanmonstar/warp)
+- [Rocket](https://rocket.rs/)
+
+**Tools**
+- [Tokio](https://tokio.rs/)
+- [Hyper](https://hyper.rs/) - Focus on `1.0 release`
+- [Tower](https://github.com/tower-rs/tower)
+- [proc-macro-errors](https://docs.rs/proc-macro-error/latest/proc_macro_error/)
+- [proc-macro2](https://docs.rs/proc-macro2/latest/proc_macro2/)
+- [quote](https://docs.rs/quote/latest/quote/)
+- [syn](https://docs.rs/syn/latest/syn/)
+- [typed-html](https://crates.io/crates/typed-html/0.2.2) for html macro inspiration and [html-to-string-macro](https://docs.rs/html-to-string-macro/latest/src/html_to_string_macro/lib.rs.html#96-105) for html responses. 
+
+- [axum extractors](https://github.com/search?q=repo%3Atokio-rs%2Faxum+extractor&type=code)
+
+**Structure**
+- Router
+  - Filtering
+    - URL
+    - Props
+    - Response
+  - Defaults
+  - Call and Convert
+- Macros
+  - router - similar to what is done now but more organized and specific
+  - request wrapper - similar to what is written now
+  - props - [leptos](https://leptos-rs.github.io/leptos/view/03_components.html?highlight=%23%5Bprops#into-props)
 
 <!-- Footer Badges --!>
 
