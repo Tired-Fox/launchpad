@@ -11,20 +11,31 @@ use routes::{
 fn test(info: &str) -> Result<HTML<String>> {
     HTML::ok(html! {
         <h1>"Test Page"</h1>
-        <p>"Info: "{info}</p>
+        <p>"Info: " { info }</p>
     })
 }
+
+// Optional grouped format for router macro
+//
+// .router(rts! {
+//     [ index, error_page, data, plain, test ],
+//     catch {
+//         503 => unexpected,
+//         404 => not_found
+//     },
+// })
 
 #[tokio::main]
 async fn main() {
     Server::new()
-        .router(rts! {
-            [ index, error_page, data, plain, test ],
-            catch {
-                503 => unexpected,
-                404 => not_found
-            },
-        })
+        // List format of routes macro
+        .router(rts![
+            [index, error_page, data, plain, test],
+            {
+                404 => not_found,
+                503 => unexpected
+            }
+        ])
         .serve(3000)
         .await;
 }
