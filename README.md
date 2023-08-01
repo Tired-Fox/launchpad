@@ -88,10 +88,12 @@ components.
 - [Tokio](https://tokio.rs/)
 - [Hyper](https://hyper.rs/) - Focus on `1.0 release`
 - [Tower](https://github.com/tower-rs/tower)
+
 - [proc-macro-errors](https://docs.rs/proc-macro-error/latest/proc_macro_error/)
 - [proc-macro2](https://docs.rs/proc-macro2/latest/proc_macro2/)
 - [quote](https://docs.rs/quote/latest/quote/)
 - [syn](https://docs.rs/syn/latest/syn/)
+
 - [typed-html](https://crates.io/crates/typed-html/0.2.2) for html macro inspiration and [html-to-string-macro](https://docs.rs/html-to-string-macro/latest/src/html_to_string_macro/lib.rs.html#96-105) for html responses. 
 
 - [axum extractors](https://github.com/search?q=repo%3Atokio-rs%2Faxum+extractor&type=code)
@@ -108,11 +110,6 @@ components.
   - router - similar to what is done now but more organized and specific
   - request wrapper - similar to what is written now
   - props - [leptos](https://leptos-rs.github.io/leptos/view/03_components.html?highlight=%23%5Bprops#into-props)
-
-**Branding to Spider Inspiration**
-- `Tangle` or `Cobweb`
-- `Orb-Weaver`
-- `Black-Widow`
 
 <!-- Footer Badges --!>
 
