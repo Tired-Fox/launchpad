@@ -3,8 +3,8 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_error::abort;
 use quote::quote;
 use syn::{
-    bracketed, parse::Parse, punctuated::Punctuated, BareFnArg, FnArg, Ident, ItemFn, LitInt,
-    LitStr, PatType, Result, Token, Visibility,
+    bracketed, parse::Parse, punctuated::Punctuated, FnArg, Ident, ItemFn, LitInt, LitStr, PatType,
+    Result, Token, Visibility,
 };
 
 use super::{
@@ -92,11 +92,9 @@ fn parse_props(function: &ItemFn) -> TokenStream2 {
                         _ => error(arg.clone()),
                     },
                     "Body" => props.push(format!(
-                        "::wayfinder::request::Body::extract(body.to_owned()).unwrap()"
+                        "::wayfinder::request::Body::extract(body.to_owned())?"
                     )),
-                    "Query" => props.push(format!(
-                        "::wayfinder::request::Query::extract(uri).unwrap()"
-                    )),
+                    "Query" => props.push(format!("::wayfinder::request::Query::extract(uri)?")),
                     _ => error(arg.clone()),
                 };
             }
@@ -138,6 +136,7 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
     quote! {
         #docs
         #[allow(non_camel_case_types)]
+        #[derive(Debug)]
         #vis struct #name;
         impl ::wayfinder::request::Endpoint for #name {
             #[inline]
@@ -146,19 +145,19 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
             }
 
             #[inline]
-            fn path(&self) -> &'static str {
-                #path
+            fn path(&self) -> String {
+                String::from(#path)
             }
 
             fn execute(
                 &self,
                 uri: &mut hyper::Uri,
                 body: &mut Vec<u8>,
-            ) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
+            ) -> ::wayfinder::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
                 #[inline]
                 #function
 
-                Ok(hyper::Response::new(Full::new(Bytes::from(__call(#props)))))
+                __call(#props).to_response()
             }
         }
     }
@@ -187,14 +186,19 @@ pub fn request_catch(args: CatchArgs, mut function: ItemFn) -> TokenStream {
         #docs
         #[derive(Debug)]
         #[allow(non_camel_case_types)]
-        #vis struct #name();
+        #vis struct #name;
 
         #[allow(non_camel_case_types)]
         impl ::wayfinder::request::Catch for #name {
-            fn execute(&self, code: u16, message: String, reason: String) -> String {
+            fn execute(
+                &self,
+                code: u16,
+                message: String,
+                reason: String
+            ) -> ::wayfinder::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
                 #function
 
-                __callback(code, message, reason)
+                __callback(code.clone(), message, reason.clone()).to_error_response(code, reason)
             }
 
             #[inline]

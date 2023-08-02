@@ -1,7 +1,8 @@
+use crate::response::Result;
 use serde::Deserialize;
 
 pub trait IntoBody {
-    fn into_body(body: &str) -> Result<Body<Self>, String>
+    fn into_body(body: &str) -> Result<Body<Self>>
     where
         Self: Sized;
 }
@@ -9,7 +10,7 @@ pub trait IntoBody {
 #[derive(Debug, Clone, Copy)]
 pub struct Body<T: IntoBody>(pub T);
 impl<T: IntoBody> Body<T> {
-    pub fn extract(body: Vec<u8>) -> Result<Self, String>
+    pub fn extract(body: Vec<u8>) -> Result<Self>
     where
         Self: Sized,
     {
@@ -19,7 +20,7 @@ impl<T: IntoBody> Body<T> {
 }
 
 impl<'a, T: Deserialize<'a>> IntoBody for T {
-    fn into_body(body: &str) -> Result<Body<Self>, String>
+    fn into_body(body: &str) -> Result<Body<Self>>
     where
         Self: Sized,
     {
@@ -28,7 +29,7 @@ impl<'a, T: Deserialize<'a>> IntoBody for T {
             Ok(result) => Ok(Body(result)),
             Err(_) => match serde_plain::from_str::<T>(Box::leak(body.into_boxed_str())) {
                 Ok(result) => Ok(Body(result)),
-                Err(_) => Err("Failed to parse body from request".to_string()),
+                Err(_) => Err((500, "Failed to parse body from request".to_string())),
             },
         }
     }

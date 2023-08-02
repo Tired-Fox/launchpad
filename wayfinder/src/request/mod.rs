@@ -6,19 +6,26 @@ pub use query::Query;
 
 use bytes::Bytes;
 use http_body_util::Full;
-use std::convert::Infallible;
+use std::fmt::Debug;
 
-pub trait Endpoint {
+use crate::response::Result;
+
+pub trait Endpoint: Sync + Send + Debug {
     fn methods(&self) -> Vec<hyper::Method>;
-    fn path(&self) -> &'static str;
+    fn path(&self) -> String;
     fn execute(
         &self,
         uri: &mut hyper::Uri,
         body: &mut Vec<u8>,
-    ) -> Result<hyper::Response<Full<Bytes>>, Infallible>;
+    ) -> Result<hyper::Response<Full<Bytes>>>;
 }
 
-pub trait Catch {
-    fn execute(&self, code: u16, message: String, reason: String) -> String;
+pub trait Catch: Send + Sync + Debug {
+    fn execute(
+        &self,
+        code: u16,
+        message: String,
+        reason: String,
+    ) -> Result<hyper::Response<Full<Bytes>>>;
     fn code(&self) -> u16;
 }

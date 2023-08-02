@@ -4,8 +4,10 @@ mod helpers;
 mod request;
 
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use proc_macro_error::proc_macro_error;
 
+use quote::quote;
 use syn::{parse_macro_input, ItemFn};
 
 use request::{request_catch, request_endpoint, CatchArgs, RequestArgs};
@@ -50,4 +52,32 @@ pub fn catch(args: TokenStream, function: TokenStream) -> TokenStream {
         parse_macro_input!(args as CatchArgs),
         parse_macro_input!(function as ItemFn),
     )
+}
+
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn main(_: TokenStream, function: TokenStream) -> TokenStream {
+    let function = parse_macro_input!(function as ItemFn);
+    let body = *function.block;
+
+    quote! {
+        #[tokio::main]
+        async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            #body
+        }
+    }
+    .into()
+}
+
+#[proc_macro]
+pub fn html(input: TokenStream) -> TokenStream {
+    let input: TokenStream2 = input.into();
+    quote! {
+        ::wayfinder::response::HTML(
+            html_to_string_macro::html! {
+                #input
+            }
+        )
+    }
+    .into()
 }
