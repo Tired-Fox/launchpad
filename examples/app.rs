@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use wayfinder::{
     prelude::*,
     request::{Body, Query},
-    response::{Redirect, HTML, JSON},
+    response::{File, Raw, Redirect, HTML, JSON},
     Server,
 };
 
@@ -76,11 +76,49 @@ pub fn not_found(code: u16, message: String, reason: String) -> HTML<String> {
     }
 }
 
+#[get("/html-file")]
+pub fn html_file() -> File<&'static str> {
+    File("examples/web/index.html")
+}
+
+#[get("/text-file")]
+pub fn text_file() -> File<&'static str> {
+    File("examples/web/index.txt")
+}
+
+#[get("/text-to-html-file")]
+pub fn text_to_html_file() -> HTML<File<&'static str>> {
+    HTML(File("examples/web/index.txt"))
+}
+
+#[get("/json-file")]
+pub fn json_file() -> File<&'static str> {
+    File("examples/web/sample.json")
+}
+
+#[get("/text-to-json-file")]
+pub fn text_to_json_file() -> Result<JSON<UserQuery>> {
+    JSON::from_file(File("examples/web/sample.txt"))
+}
+
+#[get("/json-string")]
+pub fn json_string() -> JSON<Raw> {
+    JSON(r#"{"name": "zachary", "age": 23}"#.into())
+}
+
 #[wayfinder::main]
 async fn main() {
     Server::new()
         .routes(group![hello_world, home, error, redirect])
         .route(uri_capture)
+        .route(json_string)
+        .routes(group![
+            html_file,
+            text_file,
+            text_to_html_file,
+            json_file,
+            text_to_json_file
+        ])
         .catch(not_found)
         .serve(3000)
         .await
