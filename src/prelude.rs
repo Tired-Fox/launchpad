@@ -1,5 +1,6 @@
 pub use crate::request::{Catch, Endpoint};
 pub use crate::response::{IntoString, Result, ToErrorResponse, ToResponse};
+pub use serde_json::json;
 pub use wayfinder_macros::{
     catch, connect, delete, get, head, html, options, patch, post, put, request, trace,
 };

@@ -8,32 +8,7 @@ use crate::errors::default_error_page;
 
 use super::{File, IntoString, Result, ToErrorResponse, ToResponse};
 
-pub struct Raw(pub String);
-impl Serialize for Raw {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Need to convert string into Value enum first to allow for the string to be treated
-        // as an object instead of a json string literal. The resulting object is then serialized
-        // back into a string
-        serde_json::from_str::<serde_json::Value>(self.0.as_str())
-            .unwrap()
-            .serialize(serializer)
-    }
-}
-
-impl From<String> for Raw {
-    fn from(value: String) -> Self {
-        Raw(value)
-    }
-}
-
-impl From<&str> for Raw {
-    fn from(value: &str) -> Self {
-        Raw(value.to_string())
-    }
-}
+pub type Raw = serde_json::Value;
 
 pub struct JSON<T: Serialize>(pub T);
 

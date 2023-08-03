@@ -12,7 +12,7 @@ pub struct UserQuery {
 
 #[get("/json-string")]
 pub fn json_string() -> JSON<Raw> {
-    JSON(r#"{"name": "zachary", "age": 23}"#.into())
+    JSON(json!({"name": "zachary", "age": 23}))
 }
 
 #[get("/hello-world")]
