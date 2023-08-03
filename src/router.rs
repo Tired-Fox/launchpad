@@ -132,6 +132,7 @@ impl Router {
         &self,
         uri: &Uri,
         method: &Method,
+        body: &Vec<u8>,
         code: u16,
         reason: String,
         channel: Sender<Command>,
@@ -165,13 +166,25 @@ impl Router {
                     }
                     Err((code, reason)) => {
                         Router::log_request(&uri.path().to_string(), method, &code);
-                        Ok(default_error_page(&code, &reason, method, uri))
+                        Ok(default_error_page(
+                            &code,
+                            &reason,
+                            method,
+                            uri,
+                            std::str::from_utf8(body).unwrap_or("").to_string(),
+                        ))
                     }
                 }
             }
             None => {
                 Router::log_request(&uri.path().to_string(), method, &code);
-                Ok(default_error_page(&code, &reason, method, uri))
+                Ok(default_error_page(
+                    &code,
+                    &reason,
+                    method,
+                    uri,
+                    std::str::from_utf8(body).unwrap_or("").to_string(),
+                ))
             }
         }
     }
@@ -232,6 +245,9 @@ impl Router {
                                 &"File not found".to_string(),
                                 &method,
                                 &uri,
+                                std::str::from_utf8(body.as_slice())
+                                    .unwrap_or("")
+                                    .to_string(),
                             ));
                         }
                     }
@@ -260,7 +276,7 @@ impl Router {
                             Ok(response)
                         }
                         Err((code, reason)) => {
-                            self.error(&uri, &method, code, reason, channel.clone())
+                            self.error(&uri, &method, &body, code, reason, channel.clone())
                                 .await
                         }
                     },
@@ -268,6 +284,7 @@ impl Router {
                         self.error(
                             &uri,
                             &method,
+                            &body,
                             404,
                             "Page not found in router".to_string(),
                             channel.clone(),

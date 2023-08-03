@@ -7,7 +7,12 @@ use super::{IntoString, Result, ToErrorResponse, ToResponse};
 pub struct HTML<T: IntoString>(pub T);
 
 impl<T: IntoString> ToResponse for HTML<T> {
-    fn to_response(self, method: &Method, uri: &Uri) -> Result<hyper::Response<Full<Bytes>>> {
+    fn to_response(
+        self,
+        _method: &Method,
+        _uri: &Uri,
+        _body: String,
+    ) -> Result<hyper::Response<Full<Bytes>>> {
         Ok(hyper::Response::builder()
             .status(200)
             .header("Content-Type", "text/html")

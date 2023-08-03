@@ -58,7 +58,12 @@ impl<T: Deserialize<'static> + Serialize> JSON<T> {
 }
 
 impl<T: serde::Serialize> ToResponse for JSON<T> {
-    fn to_response(self, method: &Method, uri: &Uri) -> Result<hyper::Response<Full<Bytes>>> {
+    fn to_response(
+        self,
+        method: &Method,
+        uri: &Uri,
+        body: String,
+    ) -> Result<hyper::Response<Full<Bytes>>> {
         match serde_json::to_string(&self.0) {
             Ok(result) => Ok(hyper::Response::builder()
                 .status(200)
@@ -70,6 +75,7 @@ impl<T: serde::Serialize> ToResponse for JSON<T> {
                 &"Failed to parse json in response".to_string(),
                 method,
                 uri,
+                body,
             )),
         }
     }

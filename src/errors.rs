@@ -81,10 +81,11 @@ pub fn default_error_page(
     reason: &String,
     method: &Method,
     uri: &Uri,
+    body: String,
 ) -> hyper::Response<Full<Bytes>> {
     #[cfg(debug_assertions)]
     let styles = r#"
-*{box-sizing:border-box}body{margin:0;padding:0;height:100vh;height:100dvh;display:flex;justify-content:center;align-items:center}#overlay{color:#000;background:#b8b6b6;border: 1px solid #9e9e9e;display:flex;flex-direction:column;width:97%;height:95%;padding:.5rem;border-radius:.5rem;box-shadow:rgba(0,0,0,0.25) 0 54px 55px,rgba(0,0,0,0.12) 0 -12px 30px,rgba(0,0,0,0.12) 0 4px 6px,rgba(0,0,0,0.17) 0 12px 13px,rgba(0,0,0,0.09) 0 -3px 5px}details summary{cursor:pointer}h1{text-align:center;margin:.5rem}hr{border:1px solid rgba(0,0,0,0.5)}details summary>*{display:inline}summary{background-color:rgba(200,15,50,0.5);padding-block:.25rem;padding-inline:.5rem;font-weight:700}summary::marker{color:rgba(200,15,50,0.50)}details{border:1px solid rgba(200,15,50,0.75);border-radius:.25rem;display:flex;gap:.5rem;width:85%;margin-inline:auto;margin-block:1rem;font-family:Arial,sans-serif;font-size:1.1rem}details>#body{background-color:rgba(200,15,50,0.25);padding:1rem;display:flex;flex-direction:column;gap:.5rem}.path{background-color:rgba(0,0,0,.5);padding:.2rem .35rem;border-radius:.2rem}table{color:#fff;width:100%;border:1px solid #000;border-collapse:collapse}thead{background:#000}tbody{padding:.5rem;background-color:rgba(0,0,0,.25)}td{padding-block:.5rem;text-align:center}#trace{border:1px solid rgba(200,15,50,0.75);box-sizing:border-box;border-radius:.25rem;height:100%;width:85%;margin-inline:auto;overflow:auto;background-color:rgba(200,15,50,0.25)}@media(prefers-color-scheme: dark){#overlay{background:#1c1c1c;border:1px solid #171717;color:#fff}html{background:#333}}
+*{box-sizing:border-box}body{padding:.5rem;margin:0;min-height:100vh;min-height:100dvh;display:flex;justify-content:center;align-items:center}#overlay{color:#000;border:1px solid #9e9e9e;background:#b8b6b6;display:flex;flex-direction:column;width:97%;min-height:95vh;min-height:95dvh;height:95%;border-radius:.5rem;box-shadow:rgba(0,0,0,0.25) 0 54px 55px,rgba(0,0,0,0.12) 0 -12px 30px,rgba(0,0,0,0.12) 0 4px 6px,rgba(0,0,0,0.17) 0 12px 13px,rgba(0,0,0,0.09) 0 -3px 5px}h1{font-size:2.65rem;text-align:center;margin:.5rem}h2{font-size:2.441rem}h3{font-size:1.953rem}h4{font-size:1.563rem}h5{font-size:1.25rem}small,.text_small{font-size:.8rem}details summary{cursor:pointer}hr{border:1px solid rgba(0,0,0,0.5)}details summary>*{display:inline}summary{background-color:rgba(200,15,50,0.5);padding-block:.25rem;padding-inline:.5rem;font-weight:700}summary::marker{color:rgba(200,15,50,0.50)}details{border:1px solid rgba(200,15,50,0.75);border-radius:.25rem;display:flex;gap:.5rem;width:85%;margin-inline:auto;margin-block:1rem;font-family:Arial,sans-serif;font-size:1.1rem}details>#body{background-color:rgba(200,15,50,0.25);padding:1rem;display:flex;flex-direction:column;gap:.5rem}.path{background-color:rgba(0,0,0,.5);padding:.2rem .35rem;border-radius:.2rem}details>#body>div{width:80%;color:#fff;max-width:95ch;margin-inline:auto;border:1px solid rgba(0,0,0,.5);background-color:rgba(0,0,0,.25);display:flex;flex-wrap:wrap}details>#body>div>span:first-child{display:inline-block;background:#000;padding:.5rem;width:40%;display:flex;align-items:center;justify-content:center}details>#body>div>span:last-child{display:inline-block;text-align:center;padding:.5rem;width:60%;max-height:6rem;overflow:auto}details>#body>div>div:first-child{display:inline-block;text-align:center;background:#000;padding:.5rem;width:100%;max-height:15rem;overflow-y:auto}details>#body>div>pre{padding:1rem;width:100%;overflow:auto;max-height:20rem}table{color:#fff;width:100%;border:1px solid #000;border-collapse:collapse}thead{background:#000}tbody{padding:.5rem;background-color:rgba(0,0,0,.25)}td{padding-block:.5rem;text-align:center}#trace{border:1px solid rgba(200,15,50,0.75);box-sizing:border-box;border-radius:.25rem;height:100%;max-height:27rem;width:85%;margin-inline:auto;overflow:auto;background-color:rgba(200,15,50,0.25)}@media(prefers-color-scheme: dark){#overlay{background:#1c1c1c;border:1px solid #171717;color:#fff}details>#body>div>div:last-child{color:#fff}html{background:#333}}
     "#;
 
     #[cfg(debug_assertions)]
@@ -93,52 +94,46 @@ pub fn default_error_page(
         .header("Wayfinder-Reason", reason)
         .header("Content-Type", "text/html")
         .body(Full::new(Bytes::from(html_to_string_macro::html! {
-<!DOCTYPE html>
-<html lang="en">
+        <!DOCTYPE html>
+        <html lang="en">
 
-<head>
-    <meta charset="UTF-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <style>
-        {styles}
-    </style>
-</head>
+        <head>
+            <meta charset="UTF-8"/>
+            <meta name="viewport" content="width=device-width, initial-scale=1"/>
+            <style>
+                {styles}
+            </style>
+        </head>
 
-<body>
-    <div id="overlay">
-        <h1>{code}" "{MESSAGES.get(&code).unwrap()}</h1>
-        <details open>
-            <summary>
-                <h4>"Unhandled Error:"</h4>
-            </summary>
-            <div id="body">
-                <strong>{reason}</strong>
-                <table>
-                    <thead>
-                        <th>"Method"</th>
-                        <th>"Status"</th>
-                        <th>"URL"</th>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>{method}</td>
-                            <td>{code}</td>
-                            <td style="width: 50%"><span class="path">{uri.path()}</span></td>
-                        </tr>
-                    </tbody>
-                </table>
+        <body>
+            <div id="overlay">
+                <h1>{code}" "{MESSAGES.get(&code).unwrap()}</h1>
+                <details open>
+                    <summary>
+                        <h4>"Unhandled Error:"</h4>
+                    </summary>
+                    <div id="body">
+                        <strong>{reason}</strong>
+                        <div><span>"Method"</span><span>{method}</span></div>
+                        <div><span>"Status"</span><span>{code}</span></div>
+                        <div><span>"URI"</span><span><span class="path">{uri.path()}</span></span></div>
+                        <div><span>"Query"</span><span>{uri.query().unwrap_or("")}</span></div>
+                        <div>
+                            <div>"Body"</div>
+                            <div>{body}</div>
+                        </div>
+                    </div>
+                </details>
+                <div id="trace">
+                    <pre>
+        {Backtrace::capture().to_string().replace("<", "&lt;").replace(">", "&gt;")}
+                    </pre>
+                </div>
             </div>
-        </details>
-        <div id="trace">
-            <pre>
-{Backtrace::capture().to_string().replace("<", "&lt;").replace(">", "&gt;")}
-            </pre>
-        </div>
-    </div>
-</body>
+        </body>
 
-</html>
-        })))
+        </html>
+                })))
         .unwrap();
 
     #[cfg(not(debug_assertions))]

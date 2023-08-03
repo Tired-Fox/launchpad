@@ -1,6 +1,6 @@
 use crate::response::Result;
 use hyper::Uri;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub trait IntoQuery {
     fn into_query(query: &str) -> Result<Query<Self>>
@@ -28,7 +28,7 @@ impl<T: IntoQuery> From<String> for Query<T> {
     }
 }
 
-impl<'a, T: Deserialize<'a>> IntoQuery for T {
+impl<'a, T: Deserialize<'a> + Default + Serialize> IntoQuery for T {
     fn into_query(query: &str) -> Result<Query<Self>>
     where
         Self: Sized,
@@ -36,9 +36,15 @@ impl<'a, T: Deserialize<'a>> IntoQuery for T {
         let query = query.to_string();
         match serde_qs::from_str::<T>(Box::leak(query.clone().into_boxed_str())) {
             Ok(result) => Ok(Query(result)),
-            Err(_) => match serde_plain::from_str::<T>(Box::leak(query.into_boxed_str())) {
+            Err(_) => match serde_plain::from_str::<T>(Box::leak(query.clone().into_boxed_str())) {
                 Ok(result) => Ok(Query(result)),
-                Err(_) => Err((500, "Failed to parse query from request".to_string())),
+                Err(_) => Err((
+                    500,
+                    format!(
+                        "Failed to parse query from request; expected <span class=path>?{}</span>",
+                        serde_qs::to_string(&T::default()).unwrap()
+                    ),
+                )),
             },
         }
     }

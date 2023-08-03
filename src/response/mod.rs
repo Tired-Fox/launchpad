@@ -34,6 +34,7 @@ pub trait ToResponse {
         self,
         method: &Method,
         uri: &Uri,
+        body: String,
     ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>>;
 }
 
@@ -50,9 +51,10 @@ impl<T: ToResponse> ToResponse for (u16, T) {
         self,
         method: &Method,
         uri: &Uri,
+        body: String,
     ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         let code = self.0;
-        self.1.to_response(method, uri).map(|result| {
+        self.1.to_response(method, uri, body).map(|result| {
             let mut response = hyper::Response::builder()
                 .status(code)
                 .body(result.body().clone())
@@ -71,9 +73,10 @@ impl<T: ToResponse> ToResponse for Result<T> {
         self,
         method: &Method,
         uri: &Uri,
+        body: String,
     ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         match self {
-            Ok(response) => response.to_response(method, uri),
+            Ok(response) => response.to_response(method, uri, body),
             Err(error) => Err(error),
         }
     }
@@ -82,8 +85,9 @@ impl<T: ToResponse> ToResponse for Result<T> {
 impl ToResponse for String {
     fn to_response(
         self,
-        method: &Method,
-        uri: &Uri,
+        _method: &Method,
+        _uri: &Uri,
+        _body: String,
     ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         Ok(hyper::Response::builder()
             .status(200)
@@ -111,8 +115,9 @@ impl ToErrorResponse for String {
 impl ToResponse for &str {
     fn to_response(
         self,
-        method: &Method,
-        uri: &Uri,
+        _method: &Method,
+        _uri: &Uri,
+        _body: String,
     ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         Ok(hyper::Response::builder()
             .status(200)

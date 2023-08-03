@@ -5,7 +5,7 @@ use wayfinder::{
     response::{Raw, JSON},
 };
 
-#[derive(Deserialize, Debug, Serialize)]
+#[derive(Deserialize, Debug, Serialize, Default)]
 pub struct UserQuery {
     name: String,
 }

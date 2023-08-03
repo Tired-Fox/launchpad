@@ -204,8 +204,9 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
                 #[inline]
                 #function
 
+                let __copy_body = std::str::from_utf8(body.as_slice()).unwrap_or("").to_string();
                 let __captures = ::wayfinder::uri::props(&uri.path().to_string(), &self.path());
-                __call(#props).to_response(method, uri)
+                __call(#props).to_response(method, uri, __copy_body)
             }
         }
     }
