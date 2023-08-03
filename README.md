@@ -1,4 +1,4 @@
-# launchpad 
+# Wayfinder 
 
 <!-- Header Badges -->
 
@@ -20,6 +20,7 @@ Rust based web design :smile:
 Construct endpoints or error handlers like so.
 
 ```rust
+use wayfinder::prelude::*;
 // This is a text/plain response
 #[get("/")]
 fn home() -> &'static str {
@@ -28,20 +29,59 @@ fn home() -> &'static str {
 ```
 
 ```rust
+use wayfinder::{prelude::*, response::HTML};
 // This is a text/html response that could fail and the error should be either
 // given to the appropriate handler or returned as is.
-#[post("/login/<username>/<age: int>")]
-fn data(login: &str, age: i32) -> Result<HTML<String>> {
+#[post("/login/:username/:age")]
+fn data(username: String, age: i32) -> Result<HTML<String>> {
   response!(html!(<h1>"Hello, world!"</h1>))
 }
 ```
 
 ```rust
+use wayfinder::{prelude::*, response::HTML};
 // Catches any error that is 404 comming from another endpoint
 // soon this will be for all 404 errors that are thrown
+// All returns must be valid data. There can not be custom HTTP codes or results
+// returned.
 #[catch(404)]
-fn not_found(code: u16, message: String) -> HTML<String> {
+fn not_found(code: u16, message: String, reason: String) -> HTML<String> {
   html!(<h1>{code}" "{message}</h1>)
+}
+```
+
+```rust
+use wayfinder::{prelude::*, response::{JSON, Raw}};
+// Endpoint that returns json with a custom HTTP code. This response is not
+// caught by any other handlers.
+// The `Raw` type can be used inside of a JSON type to represent a shapeless object.
+#[get("/get-data")]
+fn get_data() -> (u16, JSON<Raw>) {
+  (203, JSON(json!({"name": "Wayfinder"}))
+}
+```
+
+```rust
+use wayfinder::{prelude::*, response::{JSON, Raw}, request::{Body, Query}};
+use serde::{Serialize, Deserialize};
+
+#[derive(Default, Serialize, Deserialize)]
+struct User {
+  name: String,
+}
+
+// The query and body can automatically be extracted from the request in the parameters.
+// Just use `Body` and `Query`. If a extraction or a uri capture could be missing or you don't want
+// Wayfinder throwing a 500 error automatically, you can wrap the parameters type in an `Option`.
+// Also note that the order of the parameters are not important.
+#[get("/api/user/:username")]
+fn get_user(query: Option<Query<User>>, username: String, Body(body): Body<i32>) -> Result<JSON<Raw>> {
+  let username = match query {
+    Some(User{name}) => name,
+    None => String::new()
+  };
+
+  JSON(json!({"name": username, "age": body}))
 }
 ```
 
