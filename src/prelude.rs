@@ -16,7 +16,7 @@ macro_rules! response {
 
 #[macro_export]
 macro_rules! group {
-    ($($items: ident),* $(,)?) => {
+    ($($items: expr),* $(,)?) => {
         [$(std::sync::Arc::new($items),)*]
     };
 }

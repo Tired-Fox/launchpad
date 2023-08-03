@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::Infallible, sync::Arc};
+use std::{collections::HashMap, convert::Infallible, ffi::OsStr, fs, path::Path, sync::Arc};
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
@@ -113,6 +113,7 @@ pub struct Router {
     channel: Option<Sender<Command>>,
     router: HashMap<Method, Vec<Route>>,
     catch: HashMap<u16, ErrorHandler>,
+    assets: String,
 }
 impl Router {
     pub fn new() -> Self {
@@ -120,18 +121,21 @@ impl Router {
             channel: None,
             router: HashMap::new(),
             catch: HashMap::new(),
+            assets: "web/".to_string(),
         }
     }
 
-    pub fn catch(mut self, catch: Arc<dyn Catch>) -> Self {
+    pub fn assets(&mut self, path: String) {
+        self.assets = path;
+    }
+
+    pub fn catch(&mut self, catch: Arc<dyn Catch>) {
         if !self.catch.contains_key(&catch.code()) {
             self.catch.insert(catch.code(), ErrorHandler(catch));
         }
-
-        self
     }
 
-    pub fn route(mut self, route: Arc<dyn Endpoint>) -> Self {
+    pub fn route(&mut self, route: Arc<dyn Endpoint>) {
         for method in route.methods() {
             if !self.router.contains_key(&method) {
                 self.router.insert(method.clone(), Vec::new());
@@ -141,8 +145,6 @@ impl Router {
                 .unwrap()
                 .push(Route(route.clone()));
         }
-
-        self
     }
 
     /// Start listener thread for handling access to router
@@ -287,6 +289,34 @@ impl Router {
         let (endpoint_tx, endpoint_rx) = oneshot::channel();
         match &self.channel {
             Some(channel) => {
+                let path = format!("{}{}", self.assets, uri.path());
+                let path = Path::new(&path);
+                if let Some(extension) = path.extension().and_then(OsStr::to_str) {
+                    match fs::read_to_string(path) {
+                        Ok(text) => {
+                            Router::log_request(&uri.path().to_string(), &method, &200);
+                            let mut builder = hyper::Response::builder().status(200);
+
+                            match mime_guess::from_ext(extension).first() {
+                                Some(mime) => {
+                                    builder = builder.header("Content-Type", mime.to_string())
+                                }
+                                _ => {}
+                            };
+
+                            return Ok(builder.body(Full::new(Bytes::from(text))).unwrap());
+                        }
+                        _ => {
+                            Router::log_request(&uri.path().to_string(), &method, &404);
+                            return Ok(hyper::Response::builder()
+                                .status(404)
+                                .header("Wayfinder-Reason", "File not found")
+                                .body(Full::new(Bytes::new()))
+                                .unwrap());
+                        }
+                    }
+                }
+
                 match channel
                     .send(Command::Get {
                         method: method.clone(),

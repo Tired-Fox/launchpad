@@ -79,7 +79,9 @@ fn parse_props(path: String, function: &ItemFn) -> TokenStream2 {
     let captures: Vec<String> = path
         .split("/")
         .filter_map(|p| {
-            if p.starts_with(":") {
+            if p.starts_with(":...") {
+                Some(p.strip_prefix(":...").unwrap().to_string())
+            } else if p.starts_with(":") {
                 Some(p.strip_prefix(":").unwrap().to_string())
             } else {
                 None

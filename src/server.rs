@@ -1,4 +1,4 @@
-use std::{error::Error, net::SocketAddr, sync::Arc};
+use std::{error::Error, fmt::Display, net::SocketAddr, sync::Arc};
 
 use hyper::{server::conn::http1, service::service_fn};
 use tokio::net::TcpListener;
@@ -25,33 +25,43 @@ impl IntoSocketAddr for ([u8; 4], u16) {
     }
 }
 
-pub struct Server(Router);
+pub struct Server {
+    router: Router,
+}
+
 impl Server {
     pub fn new() -> Self {
-        Server(Router::new())
+        Server {
+            router: Router::new(),
+        }
+    }
+
+    pub fn assets<T: Display>(mut self, path: T) -> Self {
+        self.router.assets(path.to_string());
+        self
     }
 
     pub fn route<T: Endpoint + 'static>(mut self, route: T) -> Self {
-        self.0 = self.0.route(Arc::new(route));
+        self.router.route(Arc::new(route));
         self
     }
 
     pub fn routes<const SIZE: usize>(mut self, routes: [Arc<dyn Endpoint>; SIZE]) -> Self {
         for route in routes {
-            self.0 = self.0.route(route);
+            self.router.route(route);
         }
         self
     }
 
     pub fn catches<const SIZE: usize>(mut self, catches: [Arc<dyn Catch>; SIZE]) -> Self {
         for catch in catches {
-            self.0 = self.0.catch(catch);
+            self.router.catch(catch);
         }
         self
     }
 
     pub fn catch<T: Catch + 'static>(mut self, catch: T) -> Self {
-        self.0 = self.0.catch(Arc::new(catch));
+        self.router.catch(Arc::new(catch));
         self
     }
 
@@ -64,13 +74,13 @@ impl Server {
         let listener = TcpListener::bind(addr.clone()).await?;
         println!("Server started at https://{}", addr);
 
-        self.0.serve_routes();
+        self.router.serve_routes();
 
         loop {
             let (stream, _) = listener.accept().await?;
             let io = TokioIo::new(stream);
 
-            let rh = self.0.clone();
+            let rh = self.router.clone();
 
             tokio::task::spawn(async move {
                 if let Err(err) = http1::Builder::new()
