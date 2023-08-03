@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #overlay {
+            color: black;
+            background: #b8b6b6;
+            display: flex;
+            flex-direction: column;
+            width: 97%;
+            height: 95%;
+            padding: .5rem;
+            border-radius: .5rem;
+            /* box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px; */
+            box-shadow: rgba(0, 0, 0, 0.25) 0px 54px 55px, rgba(0, 0, 0, 0.12) 0px -12px 30px, rgba(0, 0, 0, 0.12) 0px 4px 6px, rgba(0, 0, 0, 0.17) 0px 12px 13px, rgba(0, 0, 0, 0.09) 0px -3px 5px;
+        }
+
+        details summary {
+            cursor: pointer;
+        }
+
+        h1 {
+            text-align: center;
+            margin: .5rem;
+        }
+
+        hr {
+            border: 1px solid rgba(0, 0, 0, 0.5);
+        }
+
+        details summary>* {
+            display: inline;
+        }
+
+        summary {
+            background-color: rgba(200, 15, 50, 0.5);
+            padding-block: .25rem;
+            padding-inline: .5rem;
+            font-weight: bold;
+        }
+
+        summary::marker {
+            color: rgba(200, 15, 50, 0.50);
+        }
+
+        details {
+            border: 1px solid rgba(200, 15, 50, 0.75);
+            border-radius: .25rem;
+            display: flex;
+            gap: .5rem;
+            width: 85%;
+            margin-inline: auto;
+            margin-block: 1rem;
+            font-family: Arial, sans-serif;
+            font-size: 1.1rem;
+        }
+
+        details>#body {
+            background-color: rgba(200, 15, 50, 0.25);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: .5rem;
+        }
+
+        .path {
+            background-color: rgba(0, 0, 0, .5);
+            padding: .2rem .35rem;
+            border-radius: .2rem;
+        }
+
+        table {
+            color: white;
+            width: 100%;
+            border: 1px solid black;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: black;
+        }
+
+        tbody {
+            padding: .5rem;
+            background-color: rgba(0, 0, 0, .25);
+        }
+
+        td {
+            padding-block: .5rem;
+            text-align: center;
+        }
+
+        #trace {
+            border: 1px solid rgba(200, 15, 50, 0.75);
+            box-sizing: border-box;
+            border-radius: .25rem;
+            height: 100%;
+            width: 85%;
+            margin-inline: auto;
+            overflow: auto;
+            background-color: rgba(200, 15, 50, 0.25);
+        }
+
+        @media(prefers-color-scheme: dark) {
+            #overlay {
+                background: #1c1c1c;
+                color: white;
+            }
+
+            html {
+                background: #333
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="overlay">
+        <h1>500 Internal Server Error</h1>
+        <details>
+            <summary>
+                <h4>Error Information</h4>
+            </summary>
+            <div id="body">
+                <strong>No query to parse</strong>
+                <table>
+                    <thead>
+                        <th>
+                            Method
+                        </th>
+                        <th>
+                            Status
+                        </th>
+                        <th>
+                            URL
+                        </th>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>GET</td>
+                            <td>500</td>
+                            <td style="width: 50%"><span class="path">/</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </diV>
+        </details>
+        <div id="trace">
+            <pre>
+                stack backtrace:
+                0: playground::main::h6849180917e9510b (0x55baf1676201)
+                at src/main.rs:4
+                1: std::rt::lang_start::{{closure}}::hb3ceb20351fe39ee (0x55baf1675faf)
+                at /rustc/3c235d5600393dfe6c36eeed34042efad8d4f26e/src/libstd/rt.rs:64
+                2: {{closure}} (0x55baf16be492)
+                at src/libstd/rt.rs:49
+                do_call<closure,i32>
+                    at src/libstd/panicking.rs:293
+                    3: __rust_maybe_catch_panic (0x55baf16c00b9)
+                    at src/libpanic_unwind/lib.rs:87
+                    4: try<i32,closure> (0x55baf16bef9c)
+                        at src/libstd/panicking.rs:272
+                        catch_unwind<closure,i32>
+                            at src/libstd/panic.rs:388
+                            lang_start_internal
+                            at src/libstd/rt.rs:48
+                            5: std::rt::lang_start::h2c4217f9057b6ddb (0x55baf1675f88)
+                            at /rustc/3c235d5600393dfe6c36eeed34042efad8d4f26e/src/libstd/rt.rs:64
+                            6: main (0x55baf16762f9)
+                            7: __libc_start_main (0x7fab051b9b96)
+                            8: _start (0x55baf1675e59)
+                            9: <unknown> (0x0)</pre>
+        </div>
+    </div>
+</body>
+
+</html>

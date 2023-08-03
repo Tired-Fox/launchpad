@@ -63,6 +63,8 @@ pub fn main(_: TokenStream, function: TokenStream) -> TokenStream {
     quote! {
         #[tokio::main]
         async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            #[cfg(debug_assertions)]
+            std::env::set_var("RUST_BACKTRACE", "1");
             #body
         }
     }

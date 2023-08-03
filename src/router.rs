@@ -8,85 +8,12 @@ use tokio::sync::{
     oneshot,
 };
 
+use super::errors;
 use crate::{
+    errors::default_error_page,
     request::{Catch, Endpoint},
     uri::index,
 };
-
-mod error {
-    use phf::phf_map;
-
-    /// Default http error messages
-    pub static MESSAGES: phf::Map<u16, &'static str> = phf_map! {
-        100u16 => "Continue",
-        101u16 => "Switching protocols",
-        102u16 => "Processing",
-        103u16 => "Early Hints",
-
-        200u16 => "OK",
-        201u16 => "Created",
-        202u16 => "Accepted",
-        203u16 => "Non-Authoritative Information",
-        204u16 => "No Content",
-        205u16 => "Reset Content",
-        206u16 => "Partial Content",
-        207u16 => "Multi-Status",
-        208u16 => "Already Reported",
-        226u16 => "IM Used",
-
-        300u16 => "Multiple Choices",
-        301u16 => "Moved Permanently",
-        302u16 => "Found (Previously \"Moved Temporarily\")",
-        303u16 => "See Other",
-        304u16 => "Not Modified",
-        305u16 => "Use Proxy",
-        306u16 => "Switch Proxy",
-        307u16 => "Temporary Redirect",
-        308u16 => "Permanent Redirect",
-
-        400u16 => "Bad Request",
-        401u16 => "Unauthorized",
-        402u16 => "Payment Required",
-        403u16 => "Forbidden",
-        404u16 => "Not Found",
-        405u16 => "Method Not Allowed",
-        406u16 => "Not Acceptable",
-        407u16 => "Proxy Authentication Required",
-        408u16 => "Request Timeout",
-        409u16 => "Conflict",
-        410u16 => "Gone",
-        411u16 => "Length Required",
-        412u16 => "Precondition Failed",
-        413u16 => "Payload Too Large",
-        414u16 => "URI Too Long",
-        415u16 => "Unsupported Media Type",
-        416u16 => "Range Not Satisfiable",
-        417u16 => "Expectation Failed",
-        418u16 => "I'm a Teapot",
-        421u16 => "Misdirected Request",
-        422u16 => "Unprocessable Entity",
-        423u16 => "Locked",
-        424u16 => "Failed Dependency",
-        425u16 => "Too Early",
-        426u16 => "Upgrade Required",
-        428u16 => "Precondition Required",
-        429u16 => "Too Many Requests",
-        431u16 => "Request Header Fields Too Large",
-        451u16 => "Unavailable For Legal Reasons",
-
-        500u16 => "Internal Server Error",
-        501u16 => "Not Implemented",
-        502u16 => "Bad Gateway",
-        503u16 => "Service Unavailable",
-        504u16 => "Gateway Timeout",
-        505u16 => "HTTP Version Not Supported",
-        506u16 => "Variant Also Negotiates",
-        507u16 => "Insufficient Storage",
-        508u16 => "Loop Detected",
-        510u16 => "Not Extended",
-        511u16 => "Network Authentication Required",
-    };
-}
 
 /// Commands sent through channel to router
 #[derive(Debug)]
@@ -121,7 +48,7 @@ impl Router {
             channel: None,
             router: HashMap::new(),
             catch: HashMap::new(),
-            assets: "web/".to_string(),
+            assets: "assets/".to_string(),
         }
     }
 
@@ -225,7 +152,7 @@ impl Router {
             Some(ErrorHandler(handler)) => {
                 match handler.execute(
                     code.clone(),
-                    error::MESSAGES.get(&code).unwrap_or(&"").to_string(),
+                    errors::MESSAGES.get(&code).unwrap_or(&"").to_string(),
                     reason.clone(),
                 ) {
                     Ok(response) => {
@@ -238,21 +165,13 @@ impl Router {
                     }
                     Err((code, reason)) => {
                         Router::log_request(&uri.path().to_string(), method, &code);
-                        Ok(hyper::Response::builder()
-                            .status(code)
-                            .header("Wayfinder-Reason", reason)
-                            .body(Full::new(Bytes::new()))
-                            .unwrap())
+                        Ok(default_error_page(&code, &reason, method, uri))
                     }
                 }
             }
             None => {
                 Router::log_request(&uri.path().to_string(), method, &code);
-                Ok(hyper::Response::builder()
-                    .status(code)
-                    .header("Wayfinder-Reason", reason)
-                    .body(Full::new(Bytes::new()))
-                    .unwrap())
+                Ok(default_error_page(&code, &reason, method, uri))
             }
         }
     }
@@ -308,11 +227,12 @@ impl Router {
                         }
                         _ => {
                             Router::log_request(&uri.path().to_string(), &method, &404);
-                            return Ok(hyper::Response::builder()
-                                .status(404)
-                                .header("Wayfinder-Reason", "File not found")
-                                .body(Full::new(Bytes::new()))
-                                .unwrap());
+                            return Ok(default_error_page(
+                                &404,
+                                &"File not found".to_string(),
+                                &method,
+                                &uri,
+                            ));
                         }
                     }
                 }
@@ -330,7 +250,7 @@ impl Router {
                 };
 
                 match endpoint_rx.await.unwrap() {
-                    Some(Route(endpoint)) => match endpoint.execute(&mut uri, &mut body) {
+                    Some(Route(endpoint)) => match endpoint.execute(&method, &mut uri, &mut body) {
                         Ok(response) => {
                             Router::log_request(
                                 &uri.path().to_string(),

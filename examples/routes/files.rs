@@ -6,22 +6,22 @@ use wayfinder::{
 
 #[get("/html-file")]
 pub fn html_file() -> File<&'static str> {
-    File("examples/web/index.html")
+    File("examples/assets/index.html")
 }
 
 #[get("/text-file")]
 pub fn text_file() -> File<&'static str> {
-    File("examples/web/index.txt")
+    File("examples/assets/index.txt")
 }
 
 #[get("/text-to-html-file")]
 pub fn text_to_html_file() -> HTML<File<&'static str>> {
-    HTML(File("examples/web/index.txt"))
+    HTML(File("examples/assets/index.txt"))
 }
 
 #[get("/json-file")]
 pub fn json_file() -> File<&'static str> {
-    File("examples/web/sample.json")
+    File("examples/assets/sample.json")
 }
 
 #[derive(Deserialize, Serialize)]
@@ -33,5 +33,5 @@ pub struct User {
 
 #[get("/text-to-json-file")]
 pub fn text_to_json_file() -> Result<JSON<User>> {
-    JSON::from_file(File("examples/web/sample.txt"))
+    JSON::from_file(File("examples/assets/sample.txt"))
 }

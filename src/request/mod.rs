@@ -15,6 +15,7 @@ pub trait Endpoint: Sync + Send + Debug {
     fn path(&self) -> String;
     fn execute(
         &self,
+        method: &hyper::Method,
         uri: &mut hyper::Uri,
         body: &mut Vec<u8>,
     ) -> Result<hyper::Response<Full<Bytes>>>;

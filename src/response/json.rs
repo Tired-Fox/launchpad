@@ -1,7 +1,10 @@
 use bytes::Bytes;
 use http_body_util::Full;
+use hyper::{Method, Uri};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+
+use crate::errors::default_error_page;
 
 use super::{File, IntoString, Result, ToErrorResponse, ToResponse};
 
@@ -55,18 +58,19 @@ impl<T: Deserialize<'static> + Serialize> JSON<T> {
 }
 
 impl<T: serde::Serialize> ToResponse for JSON<T> {
-    fn to_response(self) -> Result<hyper::Response<Full<Bytes>>> {
+    fn to_response(self, method: &Method, uri: &Uri) -> Result<hyper::Response<Full<Bytes>>> {
         match serde_json::to_string(&self.0) {
             Ok(result) => Ok(hyper::Response::builder()
                 .status(200)
                 .header("Content-Type", "application/json")
                 .body(Full::new(Bytes::from(result)))
                 .unwrap()),
-            Err(_) => Ok(hyper::Response::builder()
-                .status(500)
-                .header("Content-Type", "text/html")
-                .body(Full::new(Bytes::from("<h1>500 Internal Server Error</h1>")))
-                .unwrap()),
+            Err(_) => Ok(default_error_page(
+                &500,
+                &"Failed to parse json in response".to_string(),
+                method,
+                uri,
+            )),
         }
     }
 }

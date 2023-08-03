@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use bytes::Bytes;
 use http_body_util::Full;
+use hyper::{Method, Uri};
 
 use super::{Result, ToErrorResponse, ToResponse};
 
@@ -40,7 +41,11 @@ impl<const CODE: u16> ToErrorResponse for Redirect<CODE> {
 }
 
 impl<const CODE: u16> ToResponse for Redirect<CODE> {
-    fn to_response(self) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+    fn to_response(
+        self,
+        method: &Method,
+        uri: &Uri,
+    ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         if ![301, 302, 303, 307, 308].contains(&CODE) {
             Ok(hyper::Response::builder()
                 .status(302)

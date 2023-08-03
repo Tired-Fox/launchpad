@@ -8,6 +8,7 @@ use http_body_util::Full;
 
 pub use file::File;
 pub use html::HTML;
+use hyper::{Method, Uri};
 pub use json::{Raw, JSON};
 pub use redirect::Redirect;
 
@@ -29,7 +30,11 @@ impl IntoString for &str {
 }
 
 pub trait ToResponse {
-    fn to_response(self) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>>;
+    fn to_response(
+        self,
+        method: &Method,
+        uri: &Uri,
+    ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>>;
 }
 
 pub trait ToErrorResponse {
@@ -41,9 +46,13 @@ pub trait ToErrorResponse {
 }
 
 impl<T: ToResponse> ToResponse for (u16, T) {
-    fn to_response(self) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+    fn to_response(
+        self,
+        method: &Method,
+        uri: &Uri,
+    ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         let code = self.0;
-        self.1.to_response().map(|result| {
+        self.1.to_response(method, uri).map(|result| {
             let mut response = hyper::Response::builder()
                 .status(code)
                 .body(result.body().clone())
@@ -58,16 +67,24 @@ impl<T: ToResponse> ToResponse for (u16, T) {
 }
 
 impl<T: ToResponse> ToResponse for Result<T> {
-    fn to_response(self) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+    fn to_response(
+        self,
+        method: &Method,
+        uri: &Uri,
+    ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         match self {
-            Ok(response) => response.to_response(),
+            Ok(response) => response.to_response(method, uri),
             Err(error) => Err(error),
         }
     }
 }
 
 impl ToResponse for String {
-    fn to_response(self) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+    fn to_response(
+        self,
+        method: &Method,
+        uri: &Uri,
+    ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         Ok(hyper::Response::builder()
             .status(200)
             .header("Content-Type", "text/plain")
@@ -92,7 +109,11 @@ impl ToErrorResponse for String {
 }
 
 impl ToResponse for &str {
-    fn to_response(self) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+    fn to_response(
+        self,
+        method: &Method,
+        uri: &Uri,
+    ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         Ok(hyper::Response::builder()
             .status(200)
             .header("Content-Type", "text/plain")

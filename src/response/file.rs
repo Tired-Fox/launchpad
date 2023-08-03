@@ -2,6 +2,7 @@ use std::{ffi::OsStr, fmt::Display, fs, path::Path};
 
 use bytes::Bytes;
 use http_body_util::Full;
+use hyper::{Method, Uri};
 
 use super::{IntoString, Result, ToErrorResponse, ToResponse};
 
@@ -18,7 +19,7 @@ impl<T: Display> IntoString for File<T> {
 }
 
 impl<T: Display> ToResponse for File<T> {
-    fn to_response(self) -> Result<hyper::Response<Full<Bytes>>> {
+    fn to_response(self, _method: &Method, _uri: &Uri) -> Result<hyper::Response<Full<Bytes>>> {
         let ct = match Path::new(&self.0.to_string())
             .extension()
             .and_then(OsStr::to_str)

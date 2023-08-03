@@ -197,6 +197,7 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
 
             fn execute(
                 &self,
+                method: &hyper::Method,
                 uri: &mut hyper::Uri,
                 body: &mut Vec<u8>,
             ) -> ::wayfinder::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
@@ -204,7 +205,7 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
                 #function
 
                 let __captures = ::wayfinder::uri::props(&uri.path().to_string(), &self.path());
-                __call(#props).to_response()
+                __call(#props).to_response(method, uri)
             }
         }
     }
