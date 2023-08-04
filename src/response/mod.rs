@@ -3,6 +3,8 @@ mod html;
 mod json;
 mod redirect;
 
+pub mod template;
+
 use bytes::Bytes;
 use http_body_util::Full;
 
@@ -11,6 +13,7 @@ pub use html::HTML;
 use hyper::{Method, Uri};
 pub use json::{Raw, JSON};
 pub use redirect::Redirect;
+pub use template::Template;
 
 use crate::StatusCode;
 
