@@ -1,13 +1,12 @@
-use wayfinder::{
-    prelude::*,
-    response::{File, Raw, HTML, JSON},
-};
+use wayfinder::{prelude::*, response::HTML, StatusCode};
 
 #[get("/error")]
 pub fn server() -> Result<HTML<String>> {
     // Can return a result of Ok(T) or Err((code, message))
     // response! shortcuts and wraps what is inside making the syntax simpler
-    response!(500, "Custom user error")
+    response!(StatusCode::InternalServerError, "Custom user error")
+    // or
+    // response!(500, "Custom user error")
 }
 
 /**

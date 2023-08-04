@@ -3,6 +3,7 @@ use wayfinder::{
     prelude::*,
     request::Query,
     response::{Raw, JSON},
+    StatusCode,
 };
 
 #[derive(Deserialize, Debug, Serialize, Default)]
@@ -16,13 +17,13 @@ pub fn json_string() -> JSON<Raw> {
 }
 
 #[get("/hello-world")]
-pub fn hello_world(query: Option<Query<UserQuery>>) -> (u16, JSON<UserQuery>) {
+pub fn hello_world(query: Option<Query<UserQuery>>) -> (StatusCode, JSON<UserQuery>) {
     // Can respond with a custom response code
     // this is returned outright without catching error codes. Redirect codes are still caught
     match query {
-        Some(Query(query)) => (201, JSON(query)),
+        Some(Query(query)) => (StatusCode::Created, JSON(query)),
         _ => (
-            203,
+            StatusCode::ImATeapot,
             JSON(UserQuery {
                 name: String::new(),
             }),

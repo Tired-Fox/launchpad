@@ -10,7 +10,7 @@ use tokio::sync::{
 
 use super::errors;
 use crate::{
-    errors::default_error_page,
+    errors::{default_error_page, StatusCode},
     request::{Catch, Endpoint},
     uri::index,
 };
@@ -153,7 +153,7 @@ impl Router {
             Some(ErrorHandler(handler)) => {
                 match handler.execute(
                     code.clone(),
-                    errors::MESSAGES.get(&code).unwrap_or(&"").to_string(),
+                    StatusCode::from(code.clone()).message(),
                     reason.clone(),
                 ) {
                     Ok(response) => {

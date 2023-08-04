@@ -8,6 +8,7 @@ pub mod response;
 pub mod support;
 pub mod uri;
 
+pub use errors::StatusCode;
 pub use router::Router;
 pub use server::Server;
 

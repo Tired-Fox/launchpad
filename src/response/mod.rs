@@ -12,6 +12,8 @@ use hyper::{Method, Uri};
 pub use json::{Raw, JSON};
 pub use redirect::Redirect;
 
+use crate::StatusCode;
+
 pub type Result<T> = std::result::Result<T, (u16, String)>;
 
 pub trait IntoString {
@@ -54,6 +56,28 @@ impl<T: ToResponse> ToResponse for (u16, T) {
         body: String,
     ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
         let code = self.0;
+        self.1.to_response(method, uri, body).map(|result| {
+            let mut response = hyper::Response::builder()
+                .status(code)
+                .body(result.body().clone())
+                .unwrap();
+
+            // Copy over all headers
+            response.headers_mut().extend(result.headers().clone());
+
+            response
+        })
+    }
+}
+
+impl<T: ToResponse> ToResponse for (StatusCode, T) {
+    fn to_response(
+        self,
+        method: &Method,
+        uri: &Uri,
+        body: String,
+    ) -> Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+        let code: u16 = self.0 as u16;
         self.1.to_response(method, uri, body).map(|result| {
             let mut response = hyper::Response::builder()
                 .status(code)

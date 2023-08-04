@@ -10,6 +10,9 @@ macro_rules! response {
     ($code: literal, $message: literal) => {
         Err(($code, $message.to_string()))
     };
+    ($code: expr, $message: literal) => {
+        Err(($code as u16, $message.to_string()))
+    };
     ($result: expr) => {
         Ok($result)
     };
