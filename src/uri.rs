@@ -1,10 +1,7 @@
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Display},
-};
+use std::{collections::HashMap, fmt::Debug};
 
-pub fn split<StrLike: Display>(uri: StrLike) -> Vec<String> {
-    let mut uri = uri.to_string();
+pub fn split<StrLike: Into<String> + Clone>(uri: StrLike) -> Vec<String> {
+    let mut uri = Into::<String>::into(uri);
     if uri.starts_with("/") {
         uri = (&uri[1..]).to_string();
     }
@@ -22,8 +19,8 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn parse<StrLike: Display>(uri: &StrLike) -> Vec<Token> {
-        split(uri)
+    pub fn parse<StrLike: Into<String> + Clone>(uri: &StrLike) -> Vec<Token> {
+        split(uri.clone())
             .iter()
             .map(|s| {
                 if s.starts_with(":...") || s.starts_with(":") {
@@ -45,8 +42,8 @@ impl Token {
         }
     }
 
-    pub fn segments<StrLike: Display>(uri: &StrLike) -> Vec<Token> {
-        split(uri)
+    pub fn segments<StrLike: Into<String> + Clone>(uri: &StrLike) -> Vec<Token> {
+        split(uri.clone())
             .iter()
             .map(|s| Token::Segment(s.to_owned()))
             .collect()
@@ -54,8 +51,8 @@ impl Token {
 }
 /// None means no match
 /// Some(rank) means the uri works and this is the ranking
-pub fn compare<S: Display, P: Display>(uri: &S, pattern: &P) -> Match {
-    let uri = split(uri);
+pub fn compare<S: Into<String> + Clone, P: Into<String> + Clone>(uri: &S, pattern: &P) -> Match {
+    let uri = split(uri.clone());
     let pattern = Token::parse(pattern);
 
     if pattern.len() == 0 {
@@ -121,17 +118,20 @@ pub fn compare<S: Display, P: Display>(uri: &S, pattern: &P) -> Match {
     }
 }
 
-pub fn props<S: Display, P: Display>(uri: &S, pattern: &P) -> HashMap<String, String> {
-    match compare(&uri, &pattern) {
+pub fn props<S: Into<String> + Clone, P: Into<String> + Clone>(
+    uri: &S,
+    pattern: &P,
+) -> HashMap<String, String> {
+    match compare(uri, pattern) {
         Match::Full(_, props) => props,
         Match::Partial(_, props) => props,
         _ => HashMap::new(),
     }
 }
 
-pub fn parse_props<P: Display>(pattern: &P) -> Vec<String> {
+pub fn parse_props<P: Into<String> + Clone>(pattern: &P) -> Vec<String> {
     let mut props = Vec::new();
-    for token in Token::parse(&pattern).iter() {
+    for token in Token::parse(pattern).iter() {
         match token {
             Token::Capture(name) | Token::CatchAll(name) => {
                 props.push(name.clone());
@@ -177,9 +177,12 @@ pub fn index(uri: &String, routes: &Vec<String>) -> Option<usize> {
     }
 }
 
-pub fn find<'a, StrLike: Display>(uri: &StrLike, routes: &'a Vec<String>) -> Option<String> {
+pub fn find<'a, StrLike: Into<String> + Clone>(
+    uri: &StrLike,
+    routes: &'a Vec<String>,
+) -> Option<String> {
     index(
-        &uri.to_string(),
+        &Into::<String>::into(uri.clone()),
         &routes.iter().map(|m| m.to_string()).collect(),
     )
     .map(|index| (routes[index]).to_string())

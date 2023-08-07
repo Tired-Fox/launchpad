@@ -8,7 +8,6 @@ use tokio::sync::{
     oneshot,
 };
 
-use super::errors;
 use crate::{
     errors::{default_error_page, StatusCode},
     request::{Catch, Endpoint},

@@ -1,7 +1,6 @@
 use crate::response::template::TemplateEngine;
-use std::{error::Error, fmt::Display, net::SocketAddr, sync::Arc};
+use std::{error::Error, net::SocketAddr, sync::Arc};
 
-use cfg_if::cfg_if;
 use hyper::{server::conn::http1, service::service_fn};
 use tokio::net::TcpListener;
 
@@ -96,8 +95,8 @@ impl Server {
     }
 
     /// Set where static files should be served from
-    pub fn assets<T: Display>(mut self, path: T) -> Self {
-        self.router.assets(path.to_string());
+    pub fn assets<T: Into<String>>(mut self, path: T) -> Self {
+        self.router.assets(Into::<String>::into(path));
         self
     }
 
@@ -145,7 +144,7 @@ impl Server {
     ///         .await
     /// }
     /// ```
-    pub fn routes<const SIZE: usize>(mut self, routes: [Arc<dyn Endpoint>; SIZE]) -> Self {
+    pub fn routes(mut self, routes: Vec<Arc<dyn Endpoint>>) -> Self {
         for route in routes {
             self.router.route(route);
         }
@@ -196,7 +195,7 @@ impl Server {
     ///         .await
     /// }
     /// ```
-    pub fn catches<const SIZE: usize>(mut self, catches: [Arc<dyn Catch>; SIZE]) -> Self {
+    pub fn catches(mut self, catches: Vec<Arc<dyn Catch>>) -> Self {
         for catch in catches {
             self.router.catch(catch);
         }

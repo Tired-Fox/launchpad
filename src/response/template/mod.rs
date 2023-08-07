@@ -11,20 +11,23 @@ use super::{Result, ToErrorResponse, ToResponse};
 
 #[macro_export]
 macro_rules! context {
-    ($($key: literal : $value: expr),* $(,)?) => {
+    ($($key: ident: $value: expr),* $(,)?) => {
         std::collections::BTreeMap::<String, serde_json::Value>::from([
-            $(($key.to_string(), serde_json::to_value(&$value).unwrap()),)*
+            $((stringify!($key).to_string(), serde_json::to_value(&$value).unwrap()),)*
         ])
     };
-    (...$spread: expr, $($key: literal : $value: expr),* $(,)?) => {
+    (...$spread: expr, $($key: ident: $value: expr),* $(,)?) => {
         $crate::response::template::extend_context($spread, [
-                $(($key.to_string(), serde_json::to_value(&$value).unwrap()),)*
+                $((stringify!($key).to_string(), serde_json::to_value(&$value).unwrap()),)*
         ])
     };
 }
 
 #[macro_export]
 macro_rules! template {
+    ($path: literal) => {
+       crate::response::Template::new($path, context!{})
+    };
     ($path: literal, { $($context: tt)* } $(,)?) => {
        crate::response::Template::new($path, context!{$($context)*})
     };

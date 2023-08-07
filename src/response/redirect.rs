@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Method, Uri};
@@ -9,8 +7,8 @@ use super::{Result, ToErrorResponse, ToResponse};
 pub struct Redirect<const CODE: u16 = 302>(pub String);
 
 impl<const CODE: u16> Redirect<CODE> {
-    pub fn to<T: Display>(value: T) -> Self {
-        Redirect(value.to_string())
+    pub fn to<T: Into<String>>(value: T) -> Self {
+        Redirect(Into::<String>::into(value))
     }
 }
 

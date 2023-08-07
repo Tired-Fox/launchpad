@@ -36,5 +36,5 @@ tera = ["dep:tera"]
 handlebars = ["dep:handlebars"]
 
 [[example]]
-name = "app"
+name = "templates"
 required-features = ["tera", "handlebars"]

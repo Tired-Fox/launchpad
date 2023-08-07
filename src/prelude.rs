@@ -1,7 +1,5 @@
 pub use crate::request::{Catch, Endpoint};
-pub use crate::response::{
-    template::TemplateEngine, IntoString, Result, ToErrorResponse, ToResponse,
-};
+pub use crate::response::{template::TemplateEngine, Result, ToErrorResponse, ToResponse};
 pub use crate::{context, group, response, template};
 pub use serde_json::json;
 pub use wayfinder_macros::{
@@ -24,7 +22,7 @@ macro_rules! response {
 #[macro_export]
 macro_rules! group {
     ($($items: expr),* $(,)?) => {
-        [$(std::sync::Arc::new($items),)*]
+        vec![$(std::sync::Arc::new($items),)*]
     };
 }
 

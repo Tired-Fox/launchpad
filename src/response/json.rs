@@ -2,11 +2,10 @@ use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Method, Uri};
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
 
 use crate::errors::default_error_page;
 
-use super::{File, IntoString, Result, ToErrorResponse, ToResponse};
+use super::{File, Result, ToErrorResponse, ToResponse};
 
 pub type Raw = serde_json::Value;
 
@@ -20,9 +19,9 @@ impl<T: Deserialize<'static> + Serialize> JSON<T> {
         }
     }
 
-    pub fn from_file<U: Display>(value: File<U>) -> Result<Self> {
-        let path = value.0.to_string();
-        match serde_json::from_str::<T>(Box::leak(value.into_string().into_boxed_str())) {
+    pub fn from_file<U: Into<String> + Clone>(value: File<U>) -> Result<Self> {
+        let path = Into::<String>::into(value.0.clone());
+        match serde_json::from_str::<T>(Box::leak(Into::<String>::into(value).into_boxed_str())) {
             Ok(obj) => Ok(JSON(obj)),
             Err(err) => Err((
                 500,

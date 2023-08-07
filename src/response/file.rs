@@ -1,31 +1,30 @@
-use std::{ffi::OsStr, fmt::Display, fs, path::Path};
+use std::{ffi::OsStr, fs, path::Path};
 
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Method, Uri};
 
-use super::{IntoString, Result, ToErrorResponse, ToResponse};
+use super::{Result, ToErrorResponse, ToResponse};
 
-pub struct File<T: Display>(pub T);
+pub struct File<T: Into<String> + Clone>(pub T);
 
-impl<T: Display> IntoString for File<T> {
-    fn into_string(self) -> String {
-        println!("Exists: {}", Path::new(&self.0.to_string()).exists());
-        match fs::read_to_string(self.0.to_string()) {
+impl<T: Into<String> + Clone> Into<String> for File<T> {
+    fn into(self) -> String {
+        match fs::read_to_string(Into::<String>::into(self.0)) {
             Ok(text) => text,
             _ => String::new(),
         }
     }
 }
 
-impl<T: Display> ToResponse for File<T> {
+impl<T: Into<String> + Clone> ToResponse for File<T> {
     fn to_response(
         self,
         _method: &Method,
         _uri: &Uri,
         _body: String,
     ) -> Result<hyper::Response<Full<Bytes>>> {
-        let ct = match Path::new(&self.0.to_string())
+        let ct = match Path::new(&Into::<String>::into(self.0.clone()))
             .extension()
             .and_then(OsStr::to_str)
         {
@@ -40,14 +39,14 @@ impl<T: Display> ToResponse for File<T> {
         Ok(hyper::Response::builder()
             .status(200)
             .header("Content-Type", ct)
-            .body(Full::new(Bytes::from(self.into_string())))
+            .body(Full::new(Bytes::from(Into::<String>::into(self))))
             .unwrap())
     }
 }
 
-impl<T: Display> ToErrorResponse for File<T> {
+impl<T: Into<String> + Clone> ToErrorResponse for File<T> {
     fn to_error_response(self, code: u16, reason: String) -> Result<hyper::Response<Full<Bytes>>> {
-        let ct = match Path::new(&self.0.to_string())
+        let ct = match Path::new(&Into::<String>::into(self.0.clone()))
             .extension()
             .and_then(OsStr::to_str)
         {
@@ -62,7 +61,7 @@ impl<T: Display> ToErrorResponse for File<T> {
             .status(code)
             .header("Content-Type", ct)
             .header("Wayfinder-Reason", reason)
-            .body(Full::new(Bytes::from(self.into_string())))
+            .body(Full::new(Bytes::from(Into::<String>::into(self))))
             .unwrap())
     }
 }

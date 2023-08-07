@@ -102,10 +102,10 @@ fn parse_props(path: String, function: &ItemFn) -> TokenStream2 {
                 match get_path_name(ty).as_str() {
                     "Option" => match get_path_name(&get_path_generic(ty)).as_str() {
                         "Body" => props.push(format!(
-                            "::wayfinder::request::Body::extract(body.to_owned()).ok()"
+                            "::wayfinder::request::Body::extract(__body.to_owned()).ok()"
                         )),
                         "Query" => {
-                            props.push(format!("::wayfinder::request::Query::extract(uri).ok()"))
+                            props.push(format!("::wayfinder::request::Query::extract(__uri).ok()"))
                         }
                         _ => match &(**pat) {
                             Pat::Ident(PatIdent { ident, .. })
@@ -124,9 +124,9 @@ fn parse_props(path: String, function: &ItemFn) -> TokenStream2 {
                         },
                     },
                     "Body" => props.push(format!(
-                        "::wayfinder::request::Body::extract(body.to_owned())?"
+                        "::wayfinder::request::Body::extract(__body.to_owned())?"
                     )),
-                    "Query" => props.push(format!("::wayfinder::request::Query::extract(uri)?")),
+                    "Query" => props.push(format!("::wayfinder::request::Query::extract(__uri)?")),
                     _ => match &(**pat) {
                         Pat::Ident(PatIdent { ident, .. })
                             if captures.contains(&ident.to_string()) =>
@@ -197,16 +197,16 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
 
             fn execute(
                 &self,
-                method: &hyper::Method,
-                uri: &mut hyper::Uri,
-                body: &mut Vec<u8>,
+                __method: &hyper::Method,
+                __uri: &mut hyper::Uri,
+                __body: &mut Vec<u8>,
             ) -> ::wayfinder::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
                 #[inline]
                 #function
 
-                let __copy_body = std::str::from_utf8(body.as_slice()).unwrap_or("").to_string();
-                let __captures = ::wayfinder::uri::props(&uri.path().to_string(), &self.path());
-                __call(#props).to_response(method, uri, __copy_body)
+                let __copy_body = std::str::from_utf8(__body.clone().as_slice()).unwrap_or("").to_string();
+                let __captures = ::wayfinder::uri::props(&__uri.path().to_string(), &self.path());
+                __call(#props).to_response(__method, __uri, __copy_body)
             }
         }
     }

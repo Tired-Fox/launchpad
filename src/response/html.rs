@@ -2,11 +2,11 @@ use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{Method, Uri};
 
-use super::{IntoString, Result, ToErrorResponse, ToResponse};
+use super::{Result, ToErrorResponse, ToResponse};
 
-pub struct HTML<T: IntoString>(pub T);
+pub struct HTML<T: Into<String>>(pub T);
 
-impl<T: IntoString> ToResponse for HTML<T> {
+impl<T: Into<String>> ToResponse for HTML<T> {
     fn to_response(
         self,
         _method: &Method,
@@ -16,12 +16,12 @@ impl<T: IntoString> ToResponse for HTML<T> {
         Ok(hyper::Response::builder()
             .status(200)
             .header("Content-Type", "text/html")
-            .body(Full::new(Bytes::from(self.0.into_string())))
+            .body(Full::new(Bytes::from(Into::<String>::into(self.0))))
             .unwrap())
     }
 }
 
-impl<T: IntoString> ToErrorResponse for HTML<T> {
+impl<T: Into<String>> ToErrorResponse for HTML<T> {
     fn to_error_response(
         self,
         code: u16,
@@ -31,7 +31,7 @@ impl<T: IntoString> ToErrorResponse for HTML<T> {
             .status(code)
             .header("Content-Type", "text/html")
             .header("Wayfinder-Reason", reason)
-            .body(Full::new(Bytes::from(self.0.into_string())))
+            .body(Full::new(Bytes::from(Into::<String>::into(self.0))))
             .unwrap())
     }
 }

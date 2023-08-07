@@ -19,21 +19,6 @@ use crate::StatusCode;
 
 pub type Result<T> = std::result::Result<T, (u16, String)>;
 
-pub trait IntoString {
-    fn into_string(self) -> String;
-}
-
-impl IntoString for String {
-    fn into_string(self) -> String {
-        self
-    }
-}
-impl IntoString for &str {
-    fn into_string(self) -> String {
-        self.to_string()
-    }
-}
-
 pub trait ToResponse {
     fn to_response(
         self,
