@@ -9,15 +9,6 @@ pub trait IntoBody {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Body<T: IntoBody>(pub T);
-impl<T: IntoBody> Body<T> {
-    pub fn extract(body: Vec<u8>) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        let body = std::str::from_utf8(&body[..]).unwrap();
-        T::into_body(body)
-    }
-}
 
 impl<'a, T: Deserialize<'a>> IntoBody for T {
     fn into_body(body: &str) -> Result<Body<Self>>

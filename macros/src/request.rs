@@ -99,49 +99,60 @@ fn parse_props(path: String, function: &ItemFn) -> TokenStream2 {
     for arg in function.sig.inputs.iter() {
         match arg {
             FnArg::Typed(PatType { ty, pat, .. }) => {
+                let data = "__data.to_param()".to_string();
+                let result_message = "";
                 match get_path_name(ty).as_str() {
-                    "Option" => match get_path_name(&get_path_generic(ty)).as_str() {
-                        "Body" => props.push(format!(
-                            "::wayfinder::request::Body::extract(__body.to_owned()).ok()"
-                        )),
-                        "Query" => {
-                            props.push(format!("::wayfinder::request::Query::extract(__uri).ok()"))
-                        }
-                        _ => match &(**pat) {
-                            Pat::Ident(PatIdent { ident, .. })
-                                if captures.contains(&ident.to_string()) =>
-                            {
+                    "Option" => {
+                        if let Pat::Ident(PatIdent { ident, .. }) = &(**pat) {
+                            if captures.contains(&ident.to_string()) {
+                                let ty = get_path_generic(ty);
                                 props.push(format!(
-                                    "__captures.get(\"{}\").unwrap_or(\"\").parse::<{}>().ok()",
+                                    "__captures.get(\"{}\").unwrap_or(&String::new()).parse::<{}>().ok()",
                                     ident,
                                     quote!(#ty)
                                 ))
+                            } else {
+                                props.push(data)
                             }
-                            ty => abort!(
-                                arg,
-                                format!("Expected a uri capture, was {:?}: {:?}", ty, captures)
-                            ),
-                        },
-                    },
-                    "Body" => props.push(format!(
-                        "::wayfinder::request::Body::extract(__body.to_owned())?"
-                    )),
-                    "Query" => props.push(format!("::wayfinder::request::Query::extract(__uri)?")),
-                    _ => match &(**pat) {
-                        Pat::Ident(PatIdent { ident, .. })
-                            if captures.contains(&ident.to_string()) =>
-                        {
-                            props.push(format!(
-                                "__captures.get(\"{}\").unwrap().parse::<{}>().unwrap()",
-                                ident,
-                                quote!(#ty)
-                            ))
+                        } else {
+                            props.push(data)
                         }
-                        ty => abort!(
-                            arg,
-                            format!("Expected a uri capture, was {:?}: {:?}", ty, captures)
-                        ),
-                    },
+                    }
+                    "Result" => {
+                        if let Pat::Ident(PatIdent { ident, .. }) = &(**pat) {
+                            if captures.contains(&ident.to_string()) {
+                                let ty = get_path_generic(ty);
+                                let ty = quote!(#ty);
+                                props.push(format!(
+                                    "__captures
+                                        .get(\"{}\")
+                                        .unwrap_or(&String::new())
+                                        .parse::<{}>()
+                                        .map_err(|e| (500, e.to_string()))",
+                                    ident, ty
+                                ))
+                            } else {
+                                props.push(data)
+                            }
+                        } else {
+                            props.push(data)
+                        }
+                    }
+                    _ => {
+                        if let Pat::Ident(PatIdent { ident, .. }) = &(**pat) {
+                            if captures.contains(&ident.to_string()) {
+                                props.push(format!(
+                                    "__captures.get(\"{}\").unwrap().parse::<{}>().unwrap()",
+                                    ident,
+                                    quote!(#ty)
+                                ))
+                            } else {
+                                props.push(data)
+                            }
+                        } else {
+                            props.push(data)
+                        }
+                    }
                 };
             }
             _ => error(arg.clone()),
@@ -204,9 +215,13 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
                 #[inline]
                 #function
 
-                let __copy_body = std::str::from_utf8(__body.clone().as_slice()).unwrap_or("").to_string();
                 let __captures = ::wayfinder::uri::props(&__uri.path().to_string(), &self.path());
-                __call(#props).to_response(__method, __uri, __copy_body)
+                let mut __data = ::wayfinder::request::RequestData(__uri.clone(), __method.clone(), __body.clone());
+                __call(#props).to_response(
+                    __method,
+                    __uri,
+                    std::str::from_utf8(__body.as_slice()).unwrap_or("").to_string()
+                )
             }
         }
     }

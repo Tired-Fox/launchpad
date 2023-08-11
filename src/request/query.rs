@@ -1,5 +1,4 @@
 use crate::response::Result;
-use hyper::Uri;
 use serde::{Deserialize, Serialize};
 
 pub trait IntoQuery {
@@ -10,17 +9,6 @@ pub trait IntoQuery {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Query<T: IntoQuery>(pub T);
-impl<T: IntoQuery> Query<T> {
-    pub fn extract(uri: &mut Uri) -> Result<Self>
-    where
-        Self: Sized,
-    {
-        match uri.query() {
-            Some(query) => T::into_query(query),
-            _ => Err((500, "No query to parse".to_string())),
-        }
-    }
-}
 
 impl<T: IntoQuery> From<String> for Query<T> {
     fn from(value: String) -> Self {

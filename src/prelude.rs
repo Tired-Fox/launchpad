@@ -1,4 +1,4 @@
-pub use crate::request::{Catch, Endpoint};
+pub use crate::request::{Catch, Endpoint, ToParam};
 pub use crate::response::{template::TemplateEngine, Result, ToErrorResponse, ToResponse};
 pub use crate::{context, group, response, template};
 pub use serde_json::json;

@@ -14,12 +14,21 @@ use wayfinder::{
 /// matching parameters type. The name of the parameter must match the uri capture exactly to be
 /// matched. `:name` will capture a single part of the path into the name. `:...name` is a catch
 /// all capture and will get all following parts of the path into name. This can be the rest of
-/// the uri, or until the next static part of the uri. a single capture can not follow a catch all
+/// the uri, or until the next static part of the uri. A single capture can not follow a catch all
 /// capture.
-#[get("/api/:firstname/:lastname/:...path")]
-pub fn uri_capture(firstname: String, lastname: String, path: String) -> HTML<String> {
+///
+/// Captures can be wrapped in Option or Result to prevent automatic failure and 500 error when the
+/// capture is attempting to be parsed to it's respective type. Option will give None if it fails
+/// while Result will give a tuple, `(code, message)`, where it can be returned in a Result
+/// response or it can be furthure processed.
+#[get("/api/:firstname/:lastname/from/:...path")]
+pub fn uri_capture(
+    firstname: String,
+    lastname: Option<String>,
+    path: Result<String>,
+) -> HTML<String> {
     html! {
-        <h1>{firstname}" "{lastname}": "<code>{path}</code></h1>
+        <h1>{firstname}" "{lastname.unwrap_or("<None>".to_string())}": "<code>{path.unwrap()}</code></h1>
     }
 }
 
@@ -28,7 +37,8 @@ pub fn uri_capture(firstname: String, lastname: String, path: String) -> HTML<St
 /// String, or it can be any Deserializable object supported by serde_qs. The result is wrapped in
 /// a Query struct but can be destructured right away. If the query is optional it can be wrapped
 /// in an Option enum and the result of the parse it converted to an option instead of being
-/// unwrapped. If the query is not optional and the parse failes the endpoint automatically
+/// unwrapped. The parameter can to also be wrapped in a Result. This will capture the error code and message
+/// from parsing the query. If the query is not wrapped and the parse failes the endpoint automatically
 /// responds with a 500 interal server error.
 ///
 /// See `optional_query` endpoint for more ways to use the Query parameter.
@@ -65,7 +75,8 @@ pub fn optional_query(q: Option<Query<UserQuery>>) -> Result<JSON<UserQuery>> {
 ///
 /// Body is very similar to Query. It can be marked as optional. To allow for missing or invalid
 /// parsing of the body to not result in an error response. See `optional_body` endpoint to see
-/// more of what body can do.
+/// more of what body can do. Also like Query, body also allows for the parameter to be a result.
+/// This will capture the error code and message from parsing the body.
 #[post("/api/body")]
 pub fn bbody(Body(b): Body<String>) -> HTML<String> {
     html! {
@@ -76,16 +87,18 @@ pub fn bbody(Body(b): Body<String>) -> HTML<String> {
 
 /// This endpoint is to show additional features of Body.
 /// See `body` for base use case.
+/// This one specifically shows how result can be used to capture any errors
+/// that occur while parsing the body.
 #[post("/api/optional-body")]
-pub fn optional_body(b: Option<Body<u32>>) -> HTML<String> {
-    let num = match b {
-        Some(Body(num)) => num,
-        None => 0u32,
-    };
-    html! {
-        <h4>"Body"</h4>
-        <pre>{num}</pre>
-    }
+pub fn optional_body(b: Result<Body<u32>>) -> Result<HTML<String>> {
+    // Map the successfully parsed body into an HTML response.
+    // Return the error from parsing the body if there is one.
+    b.map(|Body(num)| {
+        html! {
+            <h4>"Body"</h4>
+            <pre>{num}</pre>
+        }
+    })
 }
 
 #[get("/")]
