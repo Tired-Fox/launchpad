@@ -1,0 +1,21 @@
+[package]
+name = "tela-macros"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Tela web frameworks macros"
+homepage = "https://tired-fox.github.io/tela/"
+documentation = "https://tired-fox.github.io/tela/docs/"
+repository = "https://github.com/Tired-Fox/tela"
+readme = "README.md"
+keywords = ["framework", "web", "server"]
+categories = ["web-programming::http-server"]
+
+[lib]
+proc-macro=true
+
+[dependencies]
+proc-macro-error = "1.0.4"
+proc-macro2 = "1.0.66"
+quote = "1.0.32"
+syn = { version = "2.0.28", features = ["full", "fold", "extra-traits"] }
