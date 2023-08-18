@@ -1,6 +1,6 @@
 [package]
 name = "tela"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 description = "Web framework that focuses on ease of use and simplicity"
@@ -16,7 +16,7 @@ categories = ["web-programming::http-server"]
 tela-macros = { path = 'macros' }
 
 [dependencies]
-tela-macros = "0.1.0"
+tela-macros = "0.1.1"
 bytes = "1.4.0"
 futures = "0.3.28"
 futures-util = "0.3.28"
