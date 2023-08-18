@@ -1,4 +1,4 @@
-# Wayfinder 
+# Tela 
 
 <!-- Header Badges -->
 
@@ -20,7 +20,7 @@ Rust based web design :smile:
 Construct endpoints or error handlers like so.
 
 ```rust
-use wayfinder::prelude::*;
+use tela::prelude::*;
 // This is a text/plain response
 #[get("/")]
 fn home() -> &'static str {
@@ -29,7 +29,7 @@ fn home() -> &'static str {
 ```
 
 ```rust
-use wayfinder::{prelude::*, response::HTML};
+use tela::{prelude::*, response::HTML};
 // This is a text/html response that could fail and the error should be either
 // given to the appropriate handler or returned as is.
 #[post("/login/:username/:age")]
@@ -39,7 +39,7 @@ fn data(username: String, age: i32) -> Result<HTML<String>> {
 ```
 
 ```rust
-use wayfinder::{prelude::*, response::HTML};
+use tela::{prelude::*, response::HTML};
 // Catches any error that is 404 comming from another endpoint
 // soon this will be for all 404 errors that are thrown
 // All returns must be valid data. There can not be custom HTTP codes or results
@@ -51,18 +51,18 @@ fn not_found(code: u16, message: String, reason: String) -> HTML<String> {
 ```
 
 ```rust
-use wayfinder::{prelude::*, response::{JSON, Raw}};
+use tela::{prelude::*, response::{JSON, Raw}};
 // Endpoint that returns json with a custom HTTP code. This response is not
 // caught by any other handlers.
 // The `Raw` type can be used inside of a JSON type to represent a shapeless object.
 #[get("/get-data")]
 fn get_data() -> (u16, JSON<Raw>) {
-  (203, JSON(json!({"name": "Wayfinder"}))
+  (203, JSON(json!({"name": "Tela"}))
 }
 ```
 
 ```rust
-use wayfinder::{prelude::*, response::{JSON, Raw}, request::{Body, Query}};
+use tela::{prelude::*, response::{JSON, Raw}, request::{Body, Query}};
 use serde::{Serialize, Deserialize};
 
 #[derive(Default, Serialize, Deserialize)]
@@ -72,7 +72,7 @@ struct User {
 
 // The query and body can automatically be extracted from the request in the parameters.
 // Just use `Body` and `Query`. If a extraction or a uri capture could be missing or you don't want
-// Wayfinder throwing a 500 error automatically, you can wrap the parameters type in an `Option`.
+// Tela throwing a 500 error automatically, you can wrap the parameters type in an `Option`.
 // Also note that the order of the parameters are not important.
 #[get("/api/user/:username")]
 fn get_user(query: Option<Query<User>>, username: String, Body(body): Body<i32>) -> Result<JSON<Raw>> {
@@ -87,9 +87,9 @@ fn get_user(query: Option<Query<User>>, username: String, Body(body): Body<i32>)
 
 Run an app like so.
 ```rust
-use wayfinder::{prelude::*, Server};
+use tela::{prelude::*, Server};
 
-#[wayfinder::main]
+#[tela::main]
 asyn fn main() {
   Server::new()
       .routes(group![home, data])

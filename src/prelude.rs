@@ -1,8 +1,9 @@
 pub use crate::request::{Catch, Endpoint, ToParam};
 pub use crate::response::{template::TemplateEngine, Result, ToErrorResponse, ToResponse};
 pub use crate::{context, group, response, template};
+pub use html_to_string_macro::html as html_raw;
 pub use serde_json::json;
-pub use wayfinder_macros::{
+pub use tela_macros::{
     catch, connect, delete, get, head, html, options, patch, post, put, request, trace,
 };
 
@@ -30,13 +31,13 @@ macro_rules! group {
 #[macro_export]
 macro_rules! tera {
     ($path: literal) => {
-        ::wayfinder::response::Tera::new($path.to_string())
+        ::tela::response::Tera::new($path.to_string())
     };
     ($path: literal, $serializable: ident) => {
-        ::wayfinder::response::Tera::from_struct($path.to_string(), $serializable)
+        ::tela::response::Tera::from_struct($path.to_string(), $serializable)
     };
     ($path: literal, {$($key: literal => $value: expr),* $(,)?} $(,)?) => {
-        ::wayfinder::response::Tera::new($path.to_string())
+        ::tela::response::Tera::new($path.to_string())
             $(.insert($key, &$value))*
     };
 }

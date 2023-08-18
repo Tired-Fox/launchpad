@@ -1,12 +1,20 @@
 [package]
-name = "wayfinder"
+name = "tela"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Web framework that focuses on ease of use and simplicity"
+homepage = "https://tired-fox.github.io/tela/"
+documentation = "https://tired-fox.github.io/tela/docs/"
+repository = "https://github.com/Tired-Fox/tela"
+readme = "README.md"
+keywords = ["framework", "web", "server"]
+categories = ["web-programming::http-server"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wayfinder-macros = { path="./macros" }
+tela-macros = { path="./macros", version="0.1.0" }
 
 bytes = "1.4.0"
 futures = "0.3.28"

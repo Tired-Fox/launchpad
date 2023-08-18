@@ -100,7 +100,6 @@ fn parse_props(path: String, function: &ItemFn) -> TokenStream2 {
         match arg {
             FnArg::Typed(PatType { ty, pat, .. }) => {
                 let data = "__data.to_param()".to_string();
-                let result_message = "";
                 match get_path_name(ty).as_str() {
                     "Option" => {
                         if let Pat::Ident(PatIdent { ident, .. }) = &(**pat) {
@@ -195,7 +194,7 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
         #[allow(non_camel_case_types)]
         #[derive(Debug)]
         #vis struct #name;
-        impl ::wayfinder::request::Endpoint for #name {
+        impl ::tela::request::Endpoint for #name {
             #[inline]
             fn methods(&self) -> Vec<hyper::Method> {
                 #methods
@@ -211,12 +210,12 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
                 __method: &hyper::Method,
                 __uri: &mut hyper::Uri,
                 __body: &mut Vec<u8>,
-            ) -> ::wayfinder::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+            ) -> ::tela::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
                 #[inline]
                 #function
 
-                let __captures = ::wayfinder::uri::props(&__uri.path().to_string(), &self.path());
-                let mut __data = ::wayfinder::request::RequestData(__uri.clone(), __method.clone(), __body.clone());
+                let __captures = ::tela::uri::props(&__uri.path().to_string(), &self.path());
+                let mut __data = ::tela::request::RequestData(__uri.clone(), __method.clone(), __body.clone());
                 __call(#props).to_response(
                     __method,
                     __uri,
@@ -253,13 +252,13 @@ pub fn request_catch(args: CatchArgs, mut function: ItemFn) -> TokenStream {
         #vis struct #name;
 
         #[allow(non_camel_case_types)]
-        impl ::wayfinder::request::Catch for #name {
+        impl ::tela::request::Catch for #name {
             fn execute(
                 &self,
                 code: u16,
                 message: String,
                 reason: String
-            ) -> ::wayfinder::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+            ) -> ::tela::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
                 #function
 
                 __callback(code.clone(), message, reason.clone()).to_error_response(code, reason)

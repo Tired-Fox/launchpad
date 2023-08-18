@@ -1,7 +1,7 @@
-extern crate wayfinder;
+extern crate tela;
 
 use serde::{Deserialize, Serialize};
-use wayfinder::{
+use tela::{
     prelude::*,
     response::{File, HTML, JSON},
     Server,
@@ -66,7 +66,7 @@ pub fn text_to_json_file() -> Result<JSON<User>> {
 ///     ]
 /// }
 ///
-/// #[wayfinder::main]
+/// #[tela::main]
 /// async fn main() {
 ///     Server::new()
 ///         .routes(file_group())
@@ -74,7 +74,7 @@ pub fn text_to_json_file() -> Result<JSON<User>> {
 ///         .await
 /// }
 /// ```
-#[wayfinder::main]
+#[tela::main]
 async fn main() {
     Server::new()
         .routes(group![

@@ -1,6 +1,6 @@
-extern crate wayfinder;
+extern crate tela;
 
-use wayfinder::{
+use tela::{
     prelude::*,
     response::{
         template::{Handlebars, Tera},
@@ -50,7 +50,7 @@ fn blog() -> Template<Handlebars> {
 /// along with providing the root template path, along with global variables. The first argument is
 /// the path to the templates while the second is any BTreeMap<String, serde_json::Value> of global
 /// values. The `context!` macro works great for creating this map.
-#[wayfinder::main]
+#[tela::main]
 async fn main() {
     Server::new()
         .tera("examples/assets/templates/", context! {})

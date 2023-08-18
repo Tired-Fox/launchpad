@@ -91,7 +91,7 @@ pub fn default_error_page(
     #[cfg(debug_assertions)]
     return hyper::Response::builder()
         .status(code.clone())
-        .header("Wayfinder-Reason", reason)
+        .header("Tela-Reason", reason)
         .header("Content-Type", "text/html")
         .body(Full::new(Bytes::from(html_to_string_macro::html! {
         <!DOCTYPE html>
@@ -139,7 +139,7 @@ pub fn default_error_page(
     #[cfg(not(debug_assertions))]
     return hyper::Response::builder()
         .status(code.clone())
-        .header("Wayfinder-Reason", reason)
+        .header("Tela-Reason", reason)
         .body(Full::new(Bytes::new()))
         .unwrap();
 }

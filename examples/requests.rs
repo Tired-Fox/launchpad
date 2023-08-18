@@ -1,14 +1,14 @@
-extern crate wayfinder;
+extern crate tela;
 
 use serde::{Deserialize, Serialize};
-use wayfinder::{
+use tela::{
     prelude::*,
     request::{Body, Query},
     response::{HTML, JSON},
     Server,
 };
 
-/// Wayfinder suppports uri captures. These are parts of a path that match a pattern
+/// tela suppports uri captures. These are parts of a path that match a pattern
 /// and are captured into variables. These variables can then be optionally used as parameters
 /// to the endpoint. When they are used as parameters String::parse::<T>() is used to cast to the
 /// matching parameters type. The name of the parameter must match the uri capture exactly to be
@@ -32,7 +32,7 @@ pub fn uri_capture(
     }
 }
 
-/// Wayfinder support automatic parsing of the uri query as a parameter. If a parameter
+/// tela support automatic parsing of the uri query as a parameter. If a parameter
 /// is set to be `Query` it will parse the uri query into it's generic type. This can be a
 /// String, or it can be any Deserializable object supported by serde_qs. The result is wrapped in
 /// a Query struct but can be destructured right away. If the query is optional it can be wrapped
@@ -58,16 +58,11 @@ struct UserQuery {
 /// This endpoints shows additional ways of using the Query parameter. See `query` endpoint for
 /// base usage.
 #[get("/api/optional-query")]
-pub fn optional_query(q: Option<Query<UserQuery>>) -> Result<JSON<UserQuery>> {
-    match q {
-        Some(Query(q)) => response!(JSON(q)),
-        None => {
-            response!(500, "Invalid or missing query")
-        }
-    }
+pub fn optional_query(q: Result<Query<UserQuery>>) -> Result<JSON<UserQuery>> {
+    q.map(|Query(q)| response!(JSON(q)))?
 }
 
-/// Wayfinder supports parsing the request body in a parameter.
+/// tela supports parsing the request body in a parameter.
 /// The type of the body can be string, which retains the body as a raw string,
 /// or as a Deserialize object. This can be a serde Deserialize struct, and it will use serde_json
 /// by default, or it can be any serde_plain supported object. This means things like u32 or Enums
@@ -78,7 +73,7 @@ pub fn optional_query(q: Option<Query<UserQuery>>) -> Result<JSON<UserQuery>> {
 /// more of what body can do. Also like Query, body also allows for the parameter to be a result.
 /// This will capture the error code and message from parsing the body.
 #[post("/api/body")]
-pub fn bbody(Body(b): Body<String>) -> HTML<String> {
+pub fn _body(Body(b): Body<String>) -> HTML<String> {
     html! {
         <h4>"Body"</h4>
         <pre>{b}</pre>
@@ -145,13 +140,15 @@ fn home() -> HTML<String> {
 /// Run `cargo run --example requests`
 /// Note: All valid parameters to an endpoint can be made optional. This allows for failed
 /// parameter parsing to be None instead of automatically returning 500 internal server error.
-#[wayfinder::main]
+#[tela::main]
 async fn main() {
     Server::new()
+        //                GET    POST
+        // .route(group![blog, get_blog])
         .route(home)
         .route(uri_capture)
         .routes(group![query, optional_query])
-        .routes(group![bbody, optional_body])
+        .routes(group![_body, optional_body])
         .serve(3000)
         .await
 }

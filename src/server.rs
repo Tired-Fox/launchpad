@@ -36,14 +36,14 @@ impl IntoSocketAddr for ([u8; 4], u16) {
 ///
 /// # Example
 /// ```
-/// use wayfinder::{prelude::*, Server};
+/// use tela::{prelude::*, Server};
 ///
 /// #[get("/")]
 /// fn home() -> HTML<String> {
 ///     html!(<h1>"Hello, world"!</h1>)
 /// }
 ///
-/// #[wayfinder::main]
+/// #[tela::main]
 /// async fn main() {
 ///     Server::new()
 ///         .route(home)
@@ -107,7 +107,7 @@ impl Server {
     ///
     /// # Example
     /// ```
-    /// use wayfinder::prelude::*;
+    /// use tela::prelude::*;
     /// #[get("/")]
     /// fn home() -> String { ... }
     ///
@@ -131,7 +131,7 @@ impl Server {
     ///
     /// # Example
     /// ```
-    /// use wayfinder::prelude::*;
+    /// use tela::prelude::*;
     /// #[get("/")]
     /// fn home() -> String { ... }
     /// #[get("/blog")]
@@ -158,7 +158,7 @@ impl Server {
     ///
     /// # Example
     /// ```
-    /// use wayfinder::prelude::*;
+    /// use tela::prelude::*;
     /// #[catch(404)]
     /// fn not_found(...) -> String { ... }
     ///
@@ -182,7 +182,7 @@ impl Server {
     ///
     /// # Example
     /// ```
-    /// use wayfinder::prelude::*;
+    /// use tela::prelude::*;
     /// #[catch(404)]
     /// fn not_found(...) -> String { ... }
     /// #[catch(500)]
@@ -209,9 +209,9 @@ impl Server {
     ///
     /// # Example
     /// ```
-    /// use wayfinder::server;
+    /// use tela::server;
     ///
-    /// #[wayfinder::main]
+    /// #[tela::main]
     /// async main() {
     ///     Server::new()
     ///         serve(3000)

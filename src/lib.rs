@@ -12,7 +12,7 @@ pub use errors::StatusCode;
 pub use router::Router;
 pub use server::Server;
 
-pub use wayfinder_macros::main;
+pub use tela_macros::main;
 
 pub trait StripPath {
     fn norm_strip_slashes(self) -> Self;
