@@ -89,6 +89,15 @@ pub fn default_error_page(
     "#;
 
     #[cfg(debug_assertions)]
+    std::env::set_var("RUST_BACKTRACE", "1");
+    let bcktrc: String = Backtrace::capture()
+        .to_string()
+        .replace("<", "&lt;")
+        .replace(">", "&gt;");
+    #[cfg(debug_assertions)]
+    std::env::set_var("RUST_BACKTRACE", "0");
+
+    #[cfg(debug_assertions)]
     return hyper::Response::builder()
         .status(code.clone())
         .header("Tela-Reason", reason)
@@ -125,8 +134,8 @@ pub fn default_error_page(
                     </div>
                 </details>
                 <div id="trace">
-                    <pre>
-        {Backtrace::capture().to_string().replace("<", "&lt;").replace(">", "&gt;")}
+                    <pre style="padding: .5rem">
+{bcktrc}
                     </pre>
                 </div>
             </div>

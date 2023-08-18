@@ -203,7 +203,7 @@ impl Router {
             },
             status,
             path
-        )
+        );
     }
 
     pub async fn parse(

@@ -63,8 +63,6 @@ pub fn main(_: TokenStream, function: TokenStream) -> TokenStream {
     quote! {
         #[tela::bump::tokio::main]
         async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
-            #[cfg(debug_assertions)]
-            std::env::set_var("RUST_BACKTRACE", "1");
             #body
         }
     }
@@ -76,7 +74,7 @@ pub fn html(input: TokenStream) -> TokenStream {
     let input: TokenStream2 = input.into();
     quote! {
         ::tela::response::HTML(
-            ::tela::::html_raw! {
+            ::tela::prelude::html_raw! {
                 #input
             }
         )

@@ -99,7 +99,11 @@ fn parse_props(path: String, function: &ItemFn) -> TokenStream2 {
     for arg in function.sig.inputs.iter() {
         match arg {
             FnArg::Typed(PatType { ty, pat, .. }) => {
-                let data = "__data.to_param()".to_string();
+                let data = "match __data.to_param() {
+                    Ok(result) => result,
+                    Err(e) => return Err(e)
+                }"
+                .to_string();
                 match get_path_name(ty).as_str() {
                     "Option" => {
                         if let Pat::Ident(PatIdent { ident, .. }) = &(**pat) {
