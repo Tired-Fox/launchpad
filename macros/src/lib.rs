@@ -75,7 +75,7 @@ pub fn main(_: TokenStream, function: TokenStream) -> TokenStream {
 pub fn html(input: TokenStream) -> TokenStream {
     let input: TokenStream2 = input.into();
     quote! {
-        ::wayfinder::response::HTML(
+        ::tela::response::HTML(
             html_to_string_macro::html! {
                 #input
             }
