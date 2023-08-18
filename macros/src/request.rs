@@ -176,7 +176,7 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
         "vec![{}]",
         args.methods
             .iter()
-            .map(|m| format!("hyper::Method::{}", m.to_uppercase()))
+            .map(|m| format!("::tela::bump::hyper::Method::{}", m.to_uppercase()))
             .collect::<Vec<String>>()
             .join(",")
     )
@@ -196,7 +196,7 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
         #vis struct #name;
         impl ::tela::request::Endpoint for #name {
             #[inline]
-            fn methods(&self) -> Vec<hyper::Method> {
+            fn methods(&self) -> Vec<::tela::bump::hyper::Method> {
                 #methods
             }
 
@@ -207,10 +207,10 @@ pub fn request_endpoint(args: RequestArgs, mut function: ItemFn) -> TokenStream 
 
             fn execute(
                 &self,
-                __method: &hyper::Method,
-                __uri: &mut hyper::Uri,
+                __method: &::tela::bump::hyper::Method,
+                __uri: &mut ::tela::bump::hyper::Uri,
                 __body: &mut Vec<u8>,
-            ) -> ::tela::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+            ) -> ::tela::response::Result<::tela::bump::hyper::Response<::tela::bump::http_body_util::Full<::tela::bump::bytes::Bytes>>> {
                 #[inline]
                 #function
 
@@ -258,7 +258,7 @@ pub fn request_catch(args: CatchArgs, mut function: ItemFn) -> TokenStream {
                 code: u16,
                 message: String,
                 reason: String
-            ) -> ::tela::response::Result<hyper::Response<http_body_util::Full<bytes::Bytes>>> {
+            ) -> ::tela::response::Result<::tela::bump::hyper::Response<::tela::bump::http_body_util::Full<bytes::Bytes>>> {
                 #function
 
                 __callback(code.clone(), message, reason.clone()).to_error_response(code, reason)

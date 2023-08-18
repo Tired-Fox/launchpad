@@ -12,6 +12,16 @@ pub use errors::StatusCode;
 pub use router::Router;
 pub use server::Server;
 
+/// Re-export needed dependencies for macros
+pub mod bump {
+    pub use bytes;
+    pub use http_body_util;
+    pub use hyper;
+    pub use serde;
+    pub use serde_json;
+    pub use tokio;
+}
+
 pub use tela_macros::main;
 
 pub trait StripPath {
