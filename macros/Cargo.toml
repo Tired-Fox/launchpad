@@ -2,6 +2,14 @@
 name = "tela-macros"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Tela web frameworks macros"
+homepage = "https://tired-fox.github.io/tela/"
+documentation = "https://tired-fox.github.io/tela/docs/"
+repository = "https://github.com/Tired-Fox/tela"
+readme = "README.md"
+keywords = ["framework", "web", "server"]
+categories = ["web-programming::http-server"]
 
 [lib]
 proc-macro=true
