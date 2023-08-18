@@ -1,6 +1,6 @@
 [package]
 name = "tela"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 description = "Web framework that focuses on ease of use and simplicity"
@@ -12,10 +12,11 @@ keywords = ["framework", "web", "server"]
 categories = ["web-programming::http-server"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[patch.crates-io]
+tela-macros = { path = 'macros' }
 
 [dependencies]
-tela-macros = { path="./macros", version="0.1.0" }
-
+tela-macros = "0.1.0"
 bytes = "1.4.0"
 futures = "0.3.28"
 futures-util = "0.3.28"
