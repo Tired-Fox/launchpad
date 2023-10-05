@@ -1,83 +1,85 @@
 extern crate proc_macro;
-mod docs;
-mod helpers;
-mod request;
-
-use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
-use proc_macro_error::proc_macro_error;
 
 use quote::quote;
-use syn::{parse_macro_input, ItemFn};
 
-use request::{request_catch, request_endpoint, CatchArgs, RequestArgs};
+use proc_macro::TokenStream;
+use proc_macro_error::{proc_macro_error, abort};
+use syn::{Expr, parse::Parse, Token, parse_macro_input, Ident};
 
-macro_rules! request_method {
-    ($name: ident) => {
-        #[proc_macro_error]
-        #[proc_macro_attribute]
-        pub fn $name(args: TokenStream, function: TokenStream) -> TokenStream {
-            let mut args = parse_macro_input!(args as RequestArgs);
-            let function = parse_macro_input!(function as ItemFn);
-            args.methods = vec![stringify!($name).to_uppercase()];
+struct DebugRelease(Expr, Expr);
 
-            request_endpoint(args, function)
+macro_rules! checked {
+    (
+        ($first: ident, $fval: ident),
+        ($second: ident, $sval: ident),
+        @debug [$debug: literal, $($doption: literal),*],
+        @release [$release: literal, $($roption: literal),*] $(,)?
+    ) => {
+        {
+            if $first.to_string() == $second.to_string() {
+                match $first.to_string().as_str() {
+                    $debug $(| $doption)* => abort!($second, "Expected release tag"),
+                    $release $(| $roption)* => abort!($second, "Expected debug tag"),
+                    _ => abort!($first, "Unkown tag name"; help="Expected debug or release tags")
+                }
+            }
+    
+            let tag = $second.to_string();
+            let tag = tag.as_str();
+
+            match $first.to_string().as_str() {
+                $debug $(| $doption)* => {
+                    if tag != $release $(&& tag != $roption)* {
+                        abort!($second, "Expected release tag")
+                    }
+                    Ok(DebugRelease($fval, $sval))
+                },
+                $release $(| $roption)* => {
+                    if tag != $debug $(&& tag != $doption)* {
+                        abort!($second, "Expected debug tag")
+                    }
+                    Ok(DebugRelease($sval, $fval))
+                }
+                _ => abort!($first, "Unkown tag name"; help="Expected debug or release tags")
+            }
+
+           
+            
         }
     };
 }
 
-#[proc_macro_error]
-#[proc_macro_attribute]
-pub fn request(args: TokenStream, function: TokenStream) -> TokenStream {
-    request_endpoint(
-        parse_macro_input!(args as RequestArgs),
-        parse_macro_input!(function as ItemFn),
-    )
-}
+impl Parse for DebugRelease {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let tag1 = input.parse::<Ident>()?;
+        let _ = input.parse::<Token![:]>();
+        let val1 = input.parse::<Expr>()?;
 
-request_method!(get);
-request_method!(post);
-request_method!(delete);
-request_method!(put);
-request_method!(options);
-request_method!(head);
-request_method!(trace);
-request_method!(connect);
-request_method!(patch);
+        let _ = input.parse::<Token![,]>();
+        
+        let tag2 = input.parse::<Ident>()?;
+        let _ = input.parse::<Token![:]>();
+        let val2 = input.parse::<Expr>()?;
+        
+        let _ = input.parse::<Token![,]>();
 
-#[proc_macro_error]
-#[proc_macro_attribute]
-pub fn catch(args: TokenStream, function: TokenStream) -> TokenStream {
-    request_catch(
-        parse_macro_input!(args as CatchArgs),
-        parse_macro_input!(function as ItemFn),
-    )
-}
-
-#[proc_macro_error]
-#[proc_macro_attribute]
-pub fn main(_: TokenStream, function: TokenStream) -> TokenStream {
-    let function = parse_macro_input!(function as ItemFn);
-    let body = *function.block;
-
-    quote! {
-        #[tela::bump::tokio::main]
-        async fn main() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
-            #body
-        }
-    }
-    .into()
-}
-
-#[proc_macro]
-pub fn html(input: TokenStream) -> TokenStream {
-    let input: TokenStream2 = input.into();
-    quote! {
-        ::tela::response::HTML(
-            ::tela::prelude::html_raw! {
-                #input
-            }
+        checked!(
+            (tag1, val1),
+            (tag2, val2),
+            @debug ["debug", "dbg", "d"],
+            @release ["release", "rls", "r"]
         )
     }
-    .into()
+}
+
+#[proc_macro_error]
+#[proc_macro]
+pub fn debug_release(input: TokenStream) -> TokenStream {
+    #[allow(unused_variables)]
+    let DebugRelease(debug, release) = parse_macro_input!(input as DebugRelease);
+
+    #[cfg(debug_assertions)]
+    return quote!(#debug).into();
+    #[cfg(not(debug_assertions))]
+    return quote!(#release).into();
 }

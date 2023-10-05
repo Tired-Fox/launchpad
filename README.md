@@ -15,6 +15,11 @@
 
 <!-- End Header -->
 
+> *_Notice:_* The library is currently going through the a rewrite to use less macros. The macro use will be targeted toward building a router and building
+> responses as those two things can be difficult.
+
+___
+
 Rust based web design :smile:
 
 Construct endpoints or error handlers like so.
