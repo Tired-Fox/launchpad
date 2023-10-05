@@ -24,19 +24,50 @@ impl Default for Socket {
     }
 }
 
+/// Construct a tela Socket to host the server to.
+///
+/// # Combinations
+/// - **(T1: u16)**
+///     - Example: `socket!(3000)`
+///     - Debug: `Socket::Local(3000)`
+///     - Release: `Socket::Network(3000)`
+/// - **(T1: u16, T2: u16)**
+///     - Example: `socket!(3000, 4000)`
+///     - Debug: `Socket::Local(3000)`
+///     - Release: `Socket::Network(4000)`
+/// - **(T1: Local|Network, T2: u16)**
+///     - Example: `socket!(Local, 3000)`
+///     - Debug: `Socket::Local(3000)`
+///     - Release: `Socket::Local(3000)`
+/// - **(T1: Local|Network, T2: u16, T3: u16)**
+///     - Example: `socket!(Network, 3000, 4000)`
+///     - Debug: `Socket::Network(3000)`
+///     - Release: `Socket::Network(4000)`
 #[macro_export]
 macro_rules! socket {
     ($dbg_port: literal, $rls_port: literal) => {
-        $crate::dbr!(d: $crate::server::Socket::Local($dbg_port), r: $crate::server::Socket::Network($rls_port))
+        $crate::dbr!(
+            d: $crate::server::Socket::Local($dbg_port),
+            r: $crate::server::Socket::Network($rls_port)
+        )
     };
     ($port: literal) => {
-        $crate::dbr!(d: $crate::server::Socket::Local($port), r: $crate::server::Socket::Network($port))
+        $crate::dbr!(
+            d: $crate::server::Socket::Local($port),
+            r: $crate::server::Socket::Network($port)
+        )
     };
     ($type: ident, $dbg_port: literal, $rls_port: literal) => {
-        $crate::dbr!(d: $crate::server::Socket::$type($dbg_port), r: $crate::server::Socket::$type($rls_port))
+        $crate::dbr!(
+            d: $crate::server::Socket::$type($dbg_port),
+            r: $crate::server::Socket::$type($rls_port)
+        )
     };
     ($type: ident, $port: literal) => {
-        $crate::dbr!(d: $crate::server::Socket::$type($port), r: $crate::server::Socket::$type($port))
+        $crate::dbr!(
+            d: $crate::server::Socket::$type($port),
+            r: $crate::server::Socket::$type($port)
+        )
     };
 }
 
@@ -71,7 +102,7 @@ impl IntoSocketAddr for Socket {
 
 /// Serve a hyper + tokio async server. Let the passed in handler or Router be what each request is resolved
 /// by.
-/// 
+///
 /// See [hyper.rs v1.0 server](https://hyper.rs/guides/1/server/hello-world/) hello world examples **Starting the Server** section for a close comparison of what this method does behind the scenes.
 ///
 /// # Example
@@ -82,7 +113,7 @@ impl IntoSocketAddr for Socket {
 /// async fn main() {
 ///     serve(Socket::default(), handler).await;
 /// }
-/// 
+///
 /// /// Request is a wrapper around hypers Request<Incoming>
 /// ///
 /// /// Tela chose this route as this will provide useful helpers for
@@ -99,10 +130,7 @@ impl IntoSocketAddr for Socket {
 ///         .body("Could not handle request")
 /// }
 /// ```
-pub async fn serve<Addr, R>(
-    addr: Addr,
-    router: R,
-)
+pub async fn serve<Addr, R>(addr: Addr, router: R)
 where
     Addr: IntoSocketAddr,
     R: IntoRouter,
@@ -111,7 +139,7 @@ where
     let listener = TcpListener::bind(addr).await.unwrap();
     let router = router.into_router();
 
-    #[cfg(feature="log")]
+    #[cfg(feature = "log")]
     println!("Serving at {}", addr);
 
     loop {

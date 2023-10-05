@@ -1,23 +1,30 @@
+pub use html_to_string_macro::html;
+use http_body_util::{BodyExt, Full};
+use hyper::{
+    body::{Bytes, Incoming},
+    Response as HttpResponse, StatusCode, Version,
+};
 use std::collections::HashMap;
 use std::fmt::Display;
-use http_body_util::Full;
-use hyper::{body::Bytes, Version, Response as HttpResponse, StatusCode};
-pub use html_to_string_macro::html;
+
+use crate::body::{BodyError, Category, ParseBody};
 
 pub type Body = Full<Bytes>;
 
 #[derive(Clone)]
-pub struct Builder { response: Response }
+pub struct Builder {
+    response: Response,
+}
 impl Builder {
     pub fn new() -> Self {
         Builder {
-            response: Response::default()
+            response: Response::default(),
         }
     }
 
     pub fn status<S>(mut self, status: S) -> Self
     where
-        S: IntoStatusCode
+        S: IntoStatusCode,
     {
         self.response.status = status.into_status_code();
         self
@@ -28,16 +35,44 @@ impl Builder {
         K: Display,
         V: Display,
     {
-        self.response.headers.insert(key.to_string(), value.to_string());
+        self.response
+            .headers
+            .insert(key.to_string(), value.to_string());
         self
     }
 
     pub fn body<B>(mut self, body: B) -> Response
     where
-        B: Into<Bytes>
+        B: Into<Bytes>,
     {
         self.response.body = Full::new(body.into());
         self.response
+    }
+}
+
+impl<'r> ParseBody<'r> for Response {
+    fn text(
+        self,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, crate::body::BodyError>> + Send>,
+    > {
+        Box::pin(async move {
+            String::from_utf8(self.body.collect().await.unwrap().to_bytes().to_vec())
+                .map_err(|e| BodyError::new(Category::Io, e.to_string()))
+        })
+    }
+}
+
+impl<'r> ParseBody<'r> for hyper::Response<Incoming> {
+    fn text(
+        self,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, crate::body::BodyError>> + Send>,
+    > {
+        Box::pin(async move {
+            String::from_utf8(self.collect().await.unwrap().to_bytes().to_vec())
+                .map_err(|e| BodyError::new(Category::Io, e.to_string()))
+        })
     }
 }
 
@@ -46,7 +81,7 @@ pub struct Response {
     status: StatusCode,
     headers: HashMap<String, String>,
     body: Full<Bytes>,
-    version: Version
+    version: Version,
 }
 
 impl Default for Response {
@@ -55,7 +90,7 @@ impl Default for Response {
             status: StatusCode::OK,
             headers: HashMap::new(),
             body: Full::new(Bytes::new()),
-            version: Version::HTTP_10
+            version: Version::HTTP_10,
         }
     }
 }
@@ -124,7 +159,7 @@ impl IntoResponse for Response {
             .version(self.version);
 
         for (key, value) in self.headers.iter() {
-           builder = builder.header(key, value)
+            builder = builder.header(key, value)
         }
 
         builder.body(self.body).unwrap()

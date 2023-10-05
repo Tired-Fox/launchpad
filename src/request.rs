@@ -1,149 +1,133 @@
+use std::collections::HashMap;
+use std::convert::Infallible;
 use std::fmt::Display;
 
 use http_body_util::BodyExt;
-use hyper::body::Incoming;
+use hyper::Version;
+use hyper::{
+    body::{Body, Bytes, Incoming},
+    Request as HttpRequest,
+};
 use serde::Deserialize;
 
-pub type HttpRequest = hyper::Request<hyper::body::Incoming>;
+use crate::body::{BodyError, Category, IntoBody, ParseBody};
 
-#[derive(Debug)]
-pub enum Category {
-    Io,
-    Impossible,
-    Parse,
-    General,
+pub struct Builder {
+    uri: String,
+    headers: HashMap<String, String>,
+    method: String,
+    version: Version,
 }
 
-impl From<serde_json::error::Category> for Category {
-    fn from(value: serde_json::error::Category) -> Self {
-        match value {
-            serde_json::error::Category::Io => Category::Io,
-            serde_json::error::Category::Data | serde_json::error::Category::Syntax => Category::Parse,
-            _ => Category::General,
+impl Default for Builder {
+    fn default() -> Self {
+        Builder {
+            uri: String::new(),
+            headers: HashMap::new(),
+            method: String::from("GET"),
+            version: Version::HTTP_10,
         }
     }
 }
 
-#[derive(Debug)]
-pub struct RequestError {
-    pub category: Category,
-    pub message: String,
-}
-
-impl Display for RequestError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[Error::{:?}] {}", self.category, self.message)
+impl Builder {
+    pub fn new() -> Self {
+        Builder::default()
     }
-}
 
-impl From<serde_json::Error> for RequestError {
-    fn from(value: serde_json::Error) -> Self {
-        RequestError {
-            category: value.classify().into(),
-            message: value.to_string(),
+    pub fn uri<T>(mut self, uri: T) -> Self
+    where
+        T: ToString,
+    {
+        self.uri = uri.to_string();
+        self
+    }
+
+    pub fn header<K, V>(mut self, key: K, value: V) -> Self
+    where
+        K: ToString,
+        V: Display,
+    {
+        self.headers.insert(key.to_string(), value.to_string());
+        self
+    }
+
+    pub fn method<M>(mut self, method: M) -> Self
+    where
+        M: ToString,
+    {
+        self.method = method.to_string();
+        self
+    }
+
+    pub fn version(mut self, version: Version) -> Self {
+        self.version = version;
+        self
+    }
+
+    pub fn body<B, T>(self, body: T) -> HttpRequest<B>
+    where
+        B: Body<Data = Bytes, Error = Infallible>,
+        T: IntoBody<B>,
+    {
+        let mut builder = HttpRequest::builder()
+            .uri(self.uri)
+            .method(self.method.as_str())
+            .version(self.version);
+
+        for (key, value) in self.headers.iter() {
+            builder = builder.header(key, value);
         }
-    }
-}
-impl From<serde_plain::Error> for RequestError {
-    fn from(value: serde_plain::Error) -> Self {
-        use serde_plain::Error;
-        let (category, message) = match value {
-            Error::ImpossibleSerialization(message) | Error::ImpossibleDeserialization(message) => {
-                (Category::Impossible, message.to_string())
-            }
-            Error::Parse(_, b) => (Category::Parse, b),
-            Error::Message(message) => (Category::General, message),
-        };
-        RequestError {
-            category,
-            message: message.to_string(),
-        }
-    }
-}
-impl From<serde_qs::Error> for RequestError {
-    fn from(value: serde_qs::Error) -> Self {
-        use serde_qs::Error;
-        let (category, message) = match value {
-            Error::FromUtf8(error) => (Category::Parse, error.to_string()),
-            Error::Utf8(error) => (Category::Parse, error.to_string()),
-            Error::ParseInt(error) => (Category::Parse, error.to_string()),
-            Error::Custom(message) => (Category::General, message),
-            Error::Parse(message, _) => (Category::Parse, message),
-            Error::Unsupported => (
-                Category::Impossible,
-                "Query parsing not supported in this context".to_string(),
-            ),
-            Error::Io(error) => (Category::Io, error.to_string()),
-        };
-        RequestError {
-            category,
-            message: message.to_string(),
-        }
+
+        builder.body(body.into_body()).unwrap()
     }
 }
 
-impl RequestError {
-    fn new(category: Category, message: String) -> Self {
-        RequestError { category, message }
-    }
-}
+pub struct Request(HttpRequest<Incoming>);
 
-pub struct Request(HttpRequest);
-
-impl From<HttpRequest> for Request {
-    fn from(value: HttpRequest) -> Self {
+impl From<HttpRequest<Incoming>> for Request {
+    fn from(value: HttpRequest<Incoming>) -> Self {
         Request(value)
     }
 }
 
-impl From<Request> for HttpRequest {
+impl From<Request> for HttpRequest<Incoming> {
     fn from(value: Request) -> Self {
         value.0
     }
 }
 
+impl<'r> ParseBody<'r> for Request {
+    fn text(
+        self,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, crate::body::BodyError>> + Send>,
+    > {
+        Box::pin(async move {
+            String::from_utf8(self.0.collect().await.unwrap().to_bytes().to_vec())
+                .map_err(|e| BodyError::new(Category::Io, e.to_string()))
+        })
+    }
+}
+
 impl<'r> Request {
-    pub fn new(req: hyper::Request<Incoming>) -> Self {
+    pub fn new(req: HttpRequest<Incoming>) -> Self {
         Request(req)
     }
 
-    pub async fn json<T: Deserialize<'r>>(self) -> Result<T, RequestError> {
-        serde_json::from_str(Box::leak(
-            String::from_utf8(self.0.collect().await.unwrap().to_bytes().to_vec())
-                .map_err(|e| RequestError::new(Category::Io, e.to_string()))?
-                .into_boxed_str(),
-        ))
-        .map_err(|e| RequestError::from(e))
+    pub fn builder() -> Builder {
+        Builder::new()
     }
 
-    pub async fn text(self) -> Result<String, RequestError> {
-        serde_plain::from_str::<String>(Box::leak(
-            String::from_utf8(self.0.collect().await.unwrap().to_bytes().to_vec())
-                .map_err(|e| RequestError::new(Category::Io, e.to_string()))?
-                .into_boxed_str(),
-        ))
-        .map_err(|e| RequestError::from(e))
+    pub fn uri(&self) -> String {
+        self.0.uri().to_string()
     }
 
-    pub async fn body<T: Deserialize<'r>>(self) -> Result<T, RequestError> {
-        serde_plain::from_str::<T>(Box::leak(
-            String::from_utf8(self.0.collect().await.unwrap().to_bytes().to_vec())
-                .map_err(|e| RequestError::new(Category::Io, e.to_string()))?
-                .into_boxed_str(),
-        ))
-        .map_err(|e| RequestError::from(e))
-    }
-
-    pub fn query<T: Deserialize<'r>>(&self) -> Result<T, RequestError> {
+    pub fn query<T: Deserialize<'r>>(&self) -> Result<T, String> {
         match self.0.uri().query() {
             Some(query) => serde_qs::from_str::<T>(Box::leak(String::from(query).into_boxed_str()))
-                .map_err(|e| RequestError::from(e)),
-            None => {
-                return Err(RequestError::new(
-                    Category::Io,
-                    "No query available to parse".to_string(),
-                ))
-            }
+                .map_err(|e| e.to_string()),
+            None => Err("No query available to parse".to_string()),
         }
     }
 }
