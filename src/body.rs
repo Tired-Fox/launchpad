@@ -106,6 +106,8 @@ pub trait ParseBody<'r> {
 
     fn text(self) -> Pin<Box<dyn Future<Output = Result<String, BodyError>> + Send>>;
 
+    fn raw(self) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, BodyError>> + Send>>;
+
     fn primitive<O>(self) -> Pin<Box<dyn Future<Output = Result<O, BodyError>> + Send>>
     where
         O: Deserialize<'r>,

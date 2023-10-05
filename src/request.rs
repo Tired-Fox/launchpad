@@ -108,6 +108,13 @@ impl<'r> ParseBody<'r> for Request {
                 .map_err(|e| BodyError::new(Category::Io, e.to_string()))
         })
     }
+
+    fn raw(
+        self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>, BodyError>> + Send>>
+    {
+        Box::pin(async move { Ok(self.0.collect().await.unwrap().to_bytes().to_vec()) })
+    }
 }
 
 impl<'r> Request {
