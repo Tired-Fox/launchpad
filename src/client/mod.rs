@@ -1,5 +1,6 @@
 //! https://hyper.rs/guides/1/client/basic/
-pub use macros::fetch;
+#[cfg(feature = "macros")]
+pub use tela_macros::fetch;
 
 use std::{future::Future, pin::Pin};
 
@@ -24,11 +25,11 @@ impl<
         T: Body<Data = D, Error = E> + Send + 'static,
     > SendRequest for hyper::Request<T>
 {
-    type Future = Pin<Box<dyn Future<Output = Response<Incoming>>>>;
+    type Future = Pin<Box<dyn Future<Output = Response<Incoming>> + Send>>;
     fn send(mut self) -> Self::Future {
         Box::pin(async move {
             let url = self.uri().clone();
-            let host = url.host().expect("uri has no host");
+            let host = url.host().expect("Fetch uri must have a host");
             let port = url.port_u16().unwrap_or(80);
 
             let authority = url.authority().unwrap().clone();
@@ -49,14 +50,14 @@ impl<
                     println!("Connection failed: {:?}", err);
                 }
             });
-
-            sender.send_request(self).await.unwrap()
+            let result = sender.send_request(self).await.unwrap();
+            result
         })
     }
 }
 
 impl SendRequest for crate::request::Builder {
-    type Future = Pin<Box<dyn Future<Output = Response<Incoming>>>>;
+    type Future = Pin<Box<dyn Future<Output = Response<Incoming>> + Send>>;
     fn send(self) -> Self::Future {
         Box::pin(async move {
             let mut request = self.body(());

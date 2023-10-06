@@ -1,14 +1,22 @@
 extern crate tela;
 
+use hyper::StatusCode;
 use tela::client::SendRequest;
-use tela::server::router::get;
+use tela::response::HTML;
+use tela::server::router::{fallback, post};
 use tela::{
     prelude::*,
     server::{serve, Router},
     Request,
 };
 
-async fn hours(_: Request) -> String {
+async fn not_found(_: Request) -> HTML<String> {
+    html! {
+        <h1>{StatusCode::NOT_FOUND}</h1>
+    }
+}
+
+async fn hours(_: Request) -> HTML<String> {
     html! {
         <html>
             <head>
@@ -32,16 +40,20 @@ async fn hours(_: Request) -> String {
 async fn main() {
     serve(
         socket!(3000, 4000),
-        Router::new().route(
-            "/hours",
-            get(hours).post(|req: Request| async {
-                match req.text().await {
-                    Ok(body) => println!("{}", body),
-                    Err(e) => eprintln!("{}", e),
-                }
-                "Hours post request!!!"
-            }),
-        ),
+        Router::new()
+            .route(
+                "/hours",
+                // get(hours)
+                post(|req: Request| async {
+                    match req.text().await {
+                        Ok(body) => println!("{}", body),
+                        Err(e) => eprintln!("{}", e),
+                    }
+                    "Hours post request!!!"
+                })
+                .fallback(not_found),
+            )
+            .fallback(not_found),
     )
     .await;
 }

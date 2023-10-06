@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-macros = { path="macros" }
+tela-macros = { path="lib/tela-macros", optional=true}
 
 html-to-string-macro = "0.2.5"
 http-body-util = "0.1.0-rc.3"
@@ -21,4 +21,15 @@ serde_qs = "0.12.0"
 tokio = { version = "1.32.0", features = ["full"] }
 
 [features]
+macros=["dep:tela-macros"]
 log=[]
+
+[[example]]
+name="client"
+required-features = ["macros", "log"]
+[[example]]
+name="server"
+required-features = ["macros", "log"]
+[[example]]
+name="quote"
+required-features = ["macros", "log"]

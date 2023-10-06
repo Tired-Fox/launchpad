@@ -1,28 +1,26 @@
 mod handler;
 
-use std::{collections::HashMap, fmt::Debug, future::Future, pin::Pin, sync::Arc};
+use std::{
+    collections::HashMap, convert::Infallible, fmt::Debug, future::Future, pin::Pin, sync::Arc,
+};
 
 use http_body_util::Full;
 use hyper::{
     body::{Bytes, Incoming},
     service::Service,
+    StatusCode,
 };
 use tokio::sync::Mutex;
 
-use crate::{
-    response::{IntoResponse, Response},
-    server::error::Error,
-    Request,
-};
+use crate::{error::Error, response::IntoResponse};
 
-pub use handler::Handler;
-use handler::HandlerFuture;
+use handler::{Handler, HandlerFuture};
 
 #[derive(Default, Clone)]
 pub enum Endpoint {
     #[default]
     None,
-    Route(Arc<dyn Handler<Future = HandlerFuture> + Send + Sync + 'static>),
+    Handler(Arc<dyn Handler<Future = HandlerFuture> + Send + Sync + 'static>),
 }
 
 impl Debug for Endpoint {
@@ -31,14 +29,14 @@ impl Debug for Endpoint {
             f,
             "{}",
             match self {
-                Self::None => "None",
-                Self::Route(_) => "Route",
+                Self::None => "No",
+                Self::Handler(_) => "Yes",
             }
         )
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Route {
     callbacks: RouteMethods,
 }
@@ -56,12 +54,24 @@ impl Routes {
             return Endpoint::None;
         }
 
-        let route = self.0.get(uri).unwrap();
-        route.fetch(method)
+        self.0.get(uri).unwrap().fetch(&method).clone()
     }
 
     pub fn new() -> Self {
         Routes(HashMap::new())
+    }
+}
+
+#[doc = "Create a new route with the fallback handler"]
+pub fn fallback<T>(callback: T) -> Route
+where
+    T: Handler<Future = HandlerFuture> + Send + Sync,
+{
+    Route {
+        callbacks: RouteMethods {
+            fallback: Endpoint::Handler(callback.referenced()),
+            ..Default::default()
+        },
     }
 }
 
@@ -76,9 +86,9 @@ macro_rules! make_methods {
                 {
                     $crate::server::router::Route {
                         callbacks: $crate::server::router::RouteMethods {
-                            [<$method:lower>]: $crate::server::router::Endpoint::Route(callback.arced()),
+                            [<$method:lower>]: $crate::server::router::Endpoint::Handler(callback.referenced()),
                             ..Default::default()
-                        }
+                        },
                     }
                 }
             )*
@@ -88,9 +98,23 @@ macro_rules! make_methods {
                 pub fn fetch(&self, method: &hyper::Method) -> Endpoint {
                     use hyper::Method;
                     match method {
-                        $(&Method::$method => self.callbacks.[<$method:lower>].clone(),)*
+                        $(&Method::$method => match &self.callbacks.[<$method:lower>]{
+                            // If endpoint doesn't exist use fallback
+                            Endpoint::None => self.callbacks.fallback.clone(),
+                            valid => valid.clone()
+                        },)*
                         _ => Endpoint::None,
                     }
+                }
+
+                #[doc="Fallback method handler"]
+                pub fn fallback<T>(mut self, callback: T) -> Self
+                where
+                    T: Handler<Future = HandlerFuture> + Send + Sync
+                {
+                    self.callbacks.fallback =
+                        $crate::server::router::Endpoint::Handler(callback.referenced());
+                    self
                 }
 
                 $(
@@ -100,16 +124,17 @@ macro_rules! make_methods {
                         T: Handler<Future = HandlerFuture> + Send + Sync
                     {
                         self.callbacks.[<$method:lower>] =
-                            $crate::server::router::Endpoint::Route(callback.arced());
+                            $crate::server::router::Endpoint::Handler(callback.referenced());
                         self
                     }
                 )*
             }
         }
         paste::paste! {
-            #[derive(Default, Clone, Debug)]
+            #[derive(Default, Debug)]
             pub struct RouteMethods {
                 $([<$method:lower>]: Endpoint,)*
+                fallback: Endpoint,
             }
         }
     };
@@ -127,10 +152,22 @@ impl Builder {
         self
     }
 
+    pub fn fallback<F>(self, fallback: F) -> Router
+    where
+        F: Handler<Future = HandlerFuture> + Send + Sync,
+    {
+        Router {
+            handler: Endpoint::None,
+            routes: Arc::new(Mutex::new(self.routes)),
+            fallback: Endpoint::Handler(fallback.referenced()),
+        }
+    }
+
     pub fn build(self) -> Router {
         Router {
-            handler: None,
+            handler: Endpoint::None,
             routes: Arc::new(Mutex::new(self.routes)),
+            fallback: Endpoint::None,
         }
     }
 }
@@ -143,33 +180,41 @@ impl Builder {
 /// - `Fallbacks`: The StatusCodes and their respective handlers.
 #[derive(Clone)]
 pub struct Router {
-    pub handler: Option<Arc<dyn Fn(Request) -> Response + Send + Sync>>,
+    pub handler: Endpoint,
     pub routes: Arc<Mutex<Routes>>,
+    pub fallback: Endpoint,
 }
 
 impl Router {
     pub async fn handler(
-        handler: Option<Arc<dyn Fn(Request) -> Response + Send + Sync>>,
         request: hyper::Request<Incoming>,
         routes: Arc<Mutex<Routes>>,
-    ) -> Result<hyper::Response<Full<Bytes>>, Error> {
-        if let Some(handler) = handler {
-            return Ok(handler(request.into()).into_response());
+        handler: Endpoint,
+        global_fallback: Endpoint,
+    ) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
+        if let Endpoint::Handler(handler) = handler {
+            return Ok(handler.call(request).await);
         }
 
-        let routes = routes.lock().await;
-        match routes.fetch(&request.uri().to_string(), &request.method()) {
-            // TODO: add static file serving
-            Endpoint::None => Ok(hyper::Response::builder()
-                .status(404)
-                .header("Tela-Reason", "Page not found")
-                .body(Full::new(Bytes::new()))
-                .unwrap()),
-            Endpoint::Route(endpoint) => {
-                let endpoint = endpoint.clone();
-                Ok(endpoint.call(request).await)
+        // Scoped fetch so lock is released after endpoint is fetched
+        let endpoint = {
+            let routes = routes.lock().await;
+            routes.fetch(request.uri().path(), &request.method())
+        };
+
+        // TODO: add static file serving
+        let result = match endpoint {
+            Endpoint::Handler(endpoint) => endpoint.call(request).await,
+            Endpoint::None => {
+                if let Endpoint::Handler(fallback) = global_fallback {
+                    fallback.call(request).await
+                } else {
+                    Error::new(StatusCode::NOT_FOUND, Some("Page not found")).into_response()
+                }
             }
-        }
+        };
+
+        Ok(result)
     }
 
     pub fn new() -> Builder {
@@ -188,14 +233,15 @@ impl Debug for Router {
 // Allow Router itself to handle hyper requests
 impl Service<hyper::Request<Incoming>> for Router {
     type Response = hyper::Response<Full<Bytes>>;
-    type Error = Error;
+    type Error = Infallible;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn call(&self, req: hyper::Request<Incoming>) -> Self::Future {
         Box::pin(Router::handler(
-            self.handler.clone(),
             req,
             self.routes.clone(),
+            self.handler.clone(),
+            self.fallback.clone(),
         ))
     }
 }
@@ -207,12 +253,13 @@ pub trait IntoRouter {
 
 impl<F> IntoRouter for F
 where
-    F: Fn(Request) -> Response + Send + Sync + 'static,
+    F: Handler<Future = HandlerFuture> + Send + Sync,
 {
     fn into_router(self) -> Router {
         Router {
-            handler: Some(Arc::new(self)),
+            handler: Endpoint::Handler(self.referenced()),
             routes: Arc::new(Mutex::new(Routes::new())),
+            fallback: Endpoint::None,
         }
     }
 }

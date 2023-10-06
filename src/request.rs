@@ -10,7 +10,8 @@ use hyper::{
 };
 use serde::Deserialize;
 
-use crate::body::{BodyError, Category, IntoBody, ParseBody};
+use crate::body::{IntoBody, ParseBody};
+use crate::error::Error;
 
 pub struct Builder {
     uri: String,
@@ -110,20 +111,15 @@ impl From<Request> for HttpRequest<Incoming> {
 impl<'r> ParseBody<'r> for Request {
     fn text(
         self,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<String, crate::body::BodyError>> + Send>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, Error>> + Send>> {
         Box::pin(async move {
             String::from_utf8(self.0.collect().await.unwrap().to_bytes().to_vec())
-                .map_err(|e| BodyError::new(Category::Io, e.to_string()))
+                .map_err(Error::from)
         })
     }
 
-    fn raw(
-        self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>, BodyError>> + Send>>
-    {
-        Box::pin(async move { Ok(self.0.collect().await.unwrap().to_bytes().to_vec()) })
+    fn raw(self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<u8>> + Send>> {
+        Box::pin(async move { self.0.collect().await.unwrap().to_bytes().to_vec() })
     }
 }
 

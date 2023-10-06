@@ -57,7 +57,7 @@ impl Parse for StrIdent {
 }
 
 pub struct Fetch {
-    uri: StrIdent,
+    uri: Expr,
     headers: Vec<(String, StrIdent)>,
     method: Option<String>,
     version: Option<LitFloat>,
@@ -217,14 +217,8 @@ impl Fetch {
     fn parse_body(input: syn::parse::ParseStream) -> syn::Result<FetchBody> {
         let expr = input.parse::<Expr>()?;
         match expr {
-            Expr::Lit(val) => {
-                println!("LITERAL");
-                Ok(FetchBody::Lit(val.lit))
-            }
-            Expr::Macro(val) => {
-                println!("MACRO");
-                Ok(FetchBody::Macro(val))
-            }
+            Expr::Lit(val) => Ok(FetchBody::Lit(val.lit)),
+            Expr::Macro(val) => Ok(FetchBody::Macro(val)),
             Expr::Path(path) => Ok(FetchBody::Ident(path)),
             _ => abort!(
                 input.span(),
@@ -237,14 +231,8 @@ impl Fetch {
 
 impl Parse for Fetch {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let uri = if input.peek(LitStr) {
-            StrIdent::Str(input.parse::<LitStr>()?)
-        } else {
-            StrIdent::Ident(input.parse::<Ident>()?)
-        };
-
         let mut fetch = Fetch {
-            uri,
+            uri: input.parse::<Expr>()?,
             headers: Vec::new(),
             method: None,
             version: None,

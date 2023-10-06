@@ -1,5 +1,5 @@
 {
     "rust-analyzer.linkedProjects": [
-        ".\\macros\\Cargo.toml"
+        ".\\lib\\tela-macros\\Cargo.toml"
     ]
 }
