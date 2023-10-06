@@ -172,14 +172,14 @@ impl Fetch {
         if METHODS.contains(&method.to_string().to_lowercase().as_str()) {
             Ok(method.to_string().to_uppercase())
         } else {
-            abort!(method.span(), "Unkown request method");
+            abort!(method.span(), "Unkown request method"; help="Try `get`, `post`, `delete`, `put`, `head`, `connect`, `options`, `trace`, `patch`");
         }
     }
 
     fn parse_version(input: syn::parse::ParseStream) -> syn::Result<LitFloat> {
         let http = input.parse::<Ident>()?;
         if http.to_string().to_lowercase().as_str() != "http" {
-            abort!(input.span(), "Expected HTTP identifier");
+            abort!(input.span(), "Expected HTTP identifier"; help="Try `http`");
         }
         let _ = input.parse::<Token![/]>()?;
         Ok(input.parse::<LitFloat>()?)
@@ -261,7 +261,7 @@ impl Parse for Fetch {
                     "version" => fetch.version = Some(Fetch::parse_version(input)?),
                     "body" => fetch.body = Fetch::parse_body(input)?,
                     _ => {
-                        abort!(key.span(), "Unkown fetch option")
+                        abort!(key.span(), "Unkown fetch option"; help="Try `method`, `version`, or `body`")
                     }
                 }
             } else if input.peek(Brace) {
