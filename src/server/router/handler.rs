@@ -1,8 +1,8 @@
-use std::{pin::Pin, future::Future, sync::Arc};
+use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
 use hyper::body::Incoming;
 
-use crate::{response::Body, Request, prelude::IntoResponse};
+use crate::{prelude::IntoResponse, response::Body, Request};
 
 pub type HandlerFuture = Pin<Box<dyn Future<Output = hyper::Response<Body>> + Send>>;
 pub trait Handler: Send + Sync + 'static {
@@ -21,6 +21,7 @@ where
     type Future = HandlerFuture;
 
     fn call(&self, request: hyper::Request<Incoming>) -> Self::Future {
+        let _ = PhantomData::<F>;
         let refer = self.clone();
         Box::pin(async move { refer(request.into()).await.into_response() })
     }

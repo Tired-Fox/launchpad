@@ -60,8 +60,18 @@ impl Builder {
         self
     }
 
-    pub fn version(mut self, version: Version) -> Self {
-        self.version = version;
+    pub fn version(mut self, version: f32) -> Self {
+        if version == 0.9 {
+            self.version = Version::HTTP_09;
+        } else if version == 1.0 {
+            self.version = Version::HTTP_10;
+        } else if version == 1.1 {
+            self.version = Version::HTTP_11;
+        } else if version == 2.0 {
+            self.version = Version::HTTP_2;
+        } else if version == 3.0 {
+            self.version = Version::HTTP_3;
+        }
         self
     }
 

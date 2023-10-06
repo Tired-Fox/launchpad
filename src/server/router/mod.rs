@@ -11,7 +11,8 @@ use tokio::sync::Mutex;
 
 use crate::{
     response::{IntoResponse, Response},
-    server::error::Error, Request,
+    server::error::Error,
+    Request,
 };
 
 pub use handler::Handler;
@@ -135,7 +136,7 @@ impl Builder {
 }
 
 /// Wrapper around important pointers to routing data.
-/// 
+///
 /// Contained pointers:
 /// - `Option<Handler>`: If present, this callback is the only handler that is used for all requests.
 /// - `Routes`: The paths and their endpoints + fallback

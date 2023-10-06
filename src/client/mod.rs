@@ -1,4 +1,5 @@
 //! https://hyper.rs/guides/1/client/basic/
+pub use macros::fetch;
 
 use std::{future::Future, pin::Pin};
 

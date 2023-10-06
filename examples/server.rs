@@ -30,12 +30,6 @@ async fn hours(_: Request) -> String {
 
 #[tela::main]
 async fn main() {
-    let response = Request::builder().uri("/hours").method("POST").send().await;
-    match response.text().await {
-        Ok(text) => println!("{}", text),
-        Err(e) => eprintln!("{}", e),
-    }
-
     serve(
         socket!(3000, 4000),
         Router::new().route(
