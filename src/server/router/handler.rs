@@ -15,7 +15,7 @@ pub trait Handler: Send + Sync + 'static {
 
 impl<F, Fut, Res> Handler for F
 where
-    F: Fn(Request) -> Fut + Clone + Sync + Send + 'static,
+    F: FnOnce(Request) -> Fut + Clone + Sync + Send + 'static,
     Fut: Future<Output = Res> + Send + 'static,
     Res: IntoResponse,
 {

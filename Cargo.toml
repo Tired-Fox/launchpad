@@ -26,10 +26,10 @@ log=[]
 
 [[example]]
 name="client"
-required-features = ["macros", "log"]
+required-features = ["macros"]
 [[example]]
 name="server"
-required-features = ["macros", "log"]
+required-features = ["macros"]
 [[example]]
 name="quote"
-required-features = ["macros", "log"]
+required-features = ["macros"]

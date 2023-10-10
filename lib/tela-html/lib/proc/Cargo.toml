@@ -1,0 +1,14 @@
+[package]
+name = "proc"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro=true
+
+[dependencies]
+lazy_static = "1.4.0"
+proc-macro-error = "1.0.4"
+proc-macro2 = "1.0.69"
+quote = "1.0.33"
+syn = "2.0.38"

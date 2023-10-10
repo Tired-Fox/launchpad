@@ -1,15 +1,17 @@
 mod returns;
 
-use http_body_util::{BodyExt, Full};
+use http_body_util::{BodyExt, Empty, Full};
 use hyper::{
     body::{Bytes, Incoming},
     Response as HttpResponse, StatusCode, Version,
 };
+use std::collections::HashMap;
 use std::fmt::Display;
-use std::{collections::HashMap, convert::Infallible};
 
-use crate::{body::ParseBody, error::Error};
-
+use crate::{
+    body::{IntoBody, ParseBody},
+    error::Error,
+};
 pub use returns::*;
 
 #[derive(Clone)]
@@ -257,5 +259,20 @@ where
             Ok(v) => v.into_response(),
             Err(e) => e.into_response(),
         }
+    }
+}
+
+impl IntoResponse for Full<Bytes> {
+    fn into_response(self) -> HttpResponse<Full<Bytes>> {
+        hyper::Response::builder().status(200).body(self).unwrap()
+    }
+}
+
+impl IntoResponse for Empty<Bytes> {
+    fn into_response(self) -> HttpResponse<Full<Bytes>> {
+        hyper::Response::builder()
+            .status(200)
+            .body(Full::new(Bytes::new()))
+            .unwrap()
     }
 }

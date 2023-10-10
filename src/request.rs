@@ -12,6 +12,7 @@ use serde::Deserialize;
 
 use crate::body::{IntoBody, ParseBody};
 use crate::error::Error;
+use crate::Full;
 
 pub struct Builder {
     uri: String,
@@ -40,7 +41,7 @@ impl Builder {
     where
         T: ToString,
     {
-        self.uri = uri.to_string();
+        self.uri = uri.to_string().replace(" ", "%20");
         self
     }
 

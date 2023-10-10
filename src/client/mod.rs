@@ -84,7 +84,7 @@ impl SendRequest for crate::request::Builder {
                 }
             });
 
-            sender.send_request(request).await.unwrap()
+            sender.send_request(request).await.unwrap().into()
         })
     }
 }

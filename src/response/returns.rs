@@ -7,24 +7,36 @@ use crate::body::IntoBody;
 use crate::error::Error;
 
 #[cfg(feature = "macros")]
-#[macro_export]
-macro_rules! html {
-    ($($html: tt)*) => {
-       $crate::response::HTML(html_to_string_macro::html!{$($html)*})
-    };
+pub mod html {
+    pub use crate::_html_new as new;
+    pub use html_to_string_macro::html as string;
+
+    #[macro_export]
+    macro_rules! _html_new {
+        ($($html: tt)*) => {
+            $crate::response::HTML(
+                $crate::response::html::string! {
+                    $($html)*
+                }
+            )
+        };
+    }
 }
-#[cfg(feature = "macros")]
-pub use crate::html;
 
 #[cfg(feature = "macros")]
-#[macro_export]
-macro_rules! json {
-    ($($json: tt)*) => {
-       $crate::response::JSON(serde_json::json!{$($json)*})
-    };
+pub mod json {
+    pub use crate::_json_new as new;
+    pub use serde_json::json as object;
+
+    #[macro_export]
+    macro_rules! _json_new {
+        ($($json: tt)*) => {
+            $crate::response::JSON(
+                $crate::response::json::object!($($json)*)
+            )
+        };
+    }
 }
-#[cfg(feature = "macros")]
-pub use crate::json;
 
 use super::IntoResponse;
 
@@ -32,6 +44,15 @@ use super::IntoResponse;
 pub struct HTML<T>(pub T)
 where
     T: IntoBody<Full<Bytes>>;
+
+impl<T> From<T> for HTML<T>
+where
+    T: IntoBody<Full<Bytes>>,
+{
+    fn from(value: T) -> Self {
+        HTML(value)
+    }
+}
 
 impl<T> Display for HTML<T>
 where
@@ -69,6 +90,15 @@ where
             Ok(v) => v,
             Err(e) => Error::from(e).into_response(),
         }
+    }
+}
+
+impl<T> From<T> for JSON<T>
+where
+    T: IntoBody<Full<Bytes>>,
+{
+    fn from(value: T) -> Self {
+        JSON(value)
     }
 }
 

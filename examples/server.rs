@@ -6,18 +6,19 @@ use tela::response::HTML;
 use tela::server::router::{fallback, post};
 use tela::{
     prelude::*,
+    response::html,
     server::{serve, Router},
     Request,
 };
 
 async fn not_found(_: Request) -> HTML<String> {
-    html! {
+    html::new! {
         <h1>{StatusCode::NOT_FOUND}</h1>
     }
 }
 
 async fn hours(_: Request) -> HTML<String> {
-    html! {
+    html::new! {
         <html>
             <head>
                 <script>r#"

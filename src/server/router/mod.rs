@@ -209,7 +209,7 @@ impl Router {
                 if let Endpoint::Handler(fallback) = global_fallback {
                     fallback.call(request).await
                 } else {
-                    Error::new(StatusCode::NOT_FOUND, Some("Page not found")).into_response()
+                    Error::from((StatusCode::NOT_FOUND, "Page not found")).into_response()
                 }
             }
         };

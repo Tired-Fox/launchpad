@@ -2,10 +2,11 @@ extern crate tela;
 
 use hyper::{body::Incoming, Response};
 use serde::Deserialize;
+use std::sync::Arc;
 use tela::{
     client::{fetch, SendRequest},
     prelude::*,
-    response::HTML,
+    response::{html, HTML},
     server::{
         router::{get, post},
         serve, Router, Socket,
@@ -21,6 +22,7 @@ struct Query {
 
 #[derive(Deserialize, Debug)]
 struct Body {
+    r#type: String,
     message: String,
     length: u32,
 }
@@ -30,8 +32,9 @@ async fn posted(req: Request) -> HTML<String> {
     let query: Query = req.query().unwrap();
     let body: Body = req.json().await.unwrap();
 
-    html! {
+    html::new! {
         <ul>
+            <li><strong>"Type: "</strong>  {body.r#type}</li>
             <li><strong>"First: "</strong>  {query.firstname}</li>
             <li><strong>"Last: "</strong>   {query.lastname}</li>
             <li><strong>"Message: "</strong>{body.message}</li>
@@ -42,38 +45,20 @@ async fn posted(req: Request) -> HTML<String> {
 
 #[tokio::main]
 async fn main() {
-    let url = "http://127.0.0.1:3000/posted?firstname=Tela&lastname=Web".to_string();
+    const url: &'static str = "http://127.0.0.1:3000/posted?firstname=Tela&lastname=Web";
 
     serve(
         Socket::Local(3000),
         Router::new()
             .route("/posted", post(posted))
             .route(
-                "/raw",
-                get(|_| async {
-                    let response = Request::builder()
-                        .uri("http://127.0.0.1:3000/posted?firstname=Tela&lastname=Web")
-                        .method("POST")
-                        .body(json!({
-                            "message": "Hello, world!",
-                            "length": 13
-                        }))
-                        .send()
-                        .await;
-
-                    match response.text().await {
-                        Ok(text) => HTML(text),
-                        Err(e) => html!(<strong>"Error: "{e}</strong>),
-                    }
-                }),
-            )
-            .route(
                 "/macro",
                 get(|_| async {
                     let response: Response<Incoming> = fetch!(
-                        "http://127.0.0.1:3000/posted?firstname=Tela&lastname=Web",
+                        url,
                         method: post,
                         body: json!({
+                            "type": "macro",
                             "message": "Hello, world!",
                             "length": 13
                         })
@@ -82,7 +67,27 @@ async fn main() {
 
                     match response.text().await {
                         Ok(text) => HTML(text),
-                        Err(e) => html!(<strong>"Error: "{e}</strong>),
+                        Err(e) => html::new!(<strong>"Error: "{e}</strong>),
+                    }
+                }),
+            )
+            .route(
+                "/raw",
+                get(|_| async {
+                    let response = Request::builder()
+                        .uri(url)
+                        .method("POST")
+                        .body(json!({
+                            "type": "raw",
+                            "message": "Hello, world!",
+                            "length": 13
+                        }))
+                        .send()
+                        .await;
+
+                    match response.text().await {
+                        Ok(text) => HTML(text),
+                        Err(e) => html::new!(<strong>"Error: "{e}</strong>),
                     }
                 }),
             ),

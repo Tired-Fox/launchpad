@@ -1,11 +1,14 @@
-use std::{convert::Infallible, fmt::Display, future::Future, pin::Pin};
+use std::{convert::Infallible, future::Future, pin::Pin};
 
 use http_body_util::{Empty, Full};
-use hyper::body::{Body, Bytes};
+use hyper::{
+    body::{Body, Bytes},
+    StatusCode,
+};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::error::Error;
+use crate::{error::Error, response::HTML};
 
 /// Parse the body into repspective types.
 ///
@@ -18,8 +21,19 @@ pub trait ParseBody<'r> {
         Self: Sized + 'static + Send,
     {
         Box::pin(async move {
-            serde_json::from_str(Box::leak(self.text().await?.into_boxed_str()))
-                .map_err(Error::from)
+            let content = self.text().await.unwrap();
+            serde_json::from_str(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
+                Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
+                    #[cfg(debug_assertions)]
+                    {
+                        HTML(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                    }
+                    #[cfg(not(debug_assertions))]
+                    {
+                        HTML(String::new())
+                    }
+                }))
+            })
         })
     }
 
@@ -27,14 +41,47 @@ pub trait ParseBody<'r> {
 
     fn raw(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>>;
 
+    fn multipart<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
+    where
+        O: Deserialize<'r>,
+        Self: Sized + 'static + Send,
+    {
+        Box::pin(async move {
+            let content = self.text().await.unwrap();
+            serde_qs::from_str::<O>(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
+                Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
+                    #[cfg(debug_assertions)]
+                    {
+                        HTML(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                    }
+                    #[cfg(not(debug_assertions))]
+                    {
+                        HTML(String::new())
+                    }
+                }))
+            })
+        })
+    }
+
     fn primitive<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
     where
         O: Deserialize<'r>,
         Self: Sized + 'static + Send,
     {
         Box::pin(async move {
-            serde_plain::from_str::<O>(Box::leak(self.text().await?.into_boxed_str()))
-                .map_err(Error::from)
+            let content = self.text().await.unwrap();
+            serde_plain::from_str::<O>(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
+                Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
+                    #[cfg(debug_assertions)]
+                    {
+                        HTML(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                    }
+                    #[cfg(not(debug_assertions))]
+                    {
+                        HTML(String::new())
+                    }
+                }))
+            })
         })
     }
 }
@@ -49,6 +96,17 @@ where
 impl IntoBody<Full<Bytes>> for &str {
     fn into_body(self) -> Full<Bytes> {
         Full::new(Bytes::from(self.to_string()))
+    }
+}
+
+impl IntoBody<Full<Bytes>> for Full<Bytes> {
+    fn into_body(self) -> Full<Bytes> {
+        self
+    }
+}
+impl IntoBody<Empty<Bytes>> for Empty<Bytes> {
+    fn into_body(self) -> Empty<Bytes> {
+        self
     }
 }
 

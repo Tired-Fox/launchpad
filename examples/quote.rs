@@ -5,7 +5,7 @@ use tela::error::Error;
 use tela::server::router::get;
 use tela::{
     prelude::*,
-    response::HTML,
+    response::{html, HTML},
     server::{serve, Router, Socket},
     Request,
 };
@@ -33,7 +33,7 @@ async fn random_quote(_: Request) -> Result<HTML<String>, Error> {
         .await;
 
     let quote = response.json::<Quote>().await?;
-    Ok(html! {
+    Ok(html::new! {
         <blockquote>
             <em>{quote.content}</em>
             <br/>
@@ -43,7 +43,7 @@ async fn random_quote(_: Request) -> Result<HTML<String>, Error> {
 }
 
 async fn home(_: Request) -> HTML<String> {
-    html! {
+    html::new! {
         <html>
             <head>
                 <title>"Featured Example"</title>
