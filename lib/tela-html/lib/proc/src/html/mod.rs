@@ -1,7 +1,7 @@
 use proc_macro2::Span;
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::{Debug, Display},
     rc::Rc,
 };
@@ -18,6 +18,9 @@ use syn::{
     Ident, LitStr, Token,
 };
 
+mod constants;
+use constants::TAGS;
+
 /// An element attribute value
 #[derive(Debug, Clone)]
 pub enum Attribute {
@@ -32,9 +35,9 @@ impl Display for Attribute {
             f,
             "{}",
             match self {
-                Self::Yes => "true".to_string(),
-                Self::Capture(val) => format!("{{{}}}", val),
-                Self::Value(val) => format!("{:?}", val),
+                Self::Yes => String::from("yes"),
+                Self::Capture(capture) => format!("{{{}}}", capture),
+                Self::Value(value) => format!("{:?}", value),
             }
         )
     }
@@ -49,7 +52,7 @@ pub enum Element {
     Tag {
         tag: String,
         attrs: HashMap<String, Attribute>,
-        spread: Option<String>,
+        spread: Option<TokenStream2>,
         captures: Vec<TokenStream2>,
         children: Option<Vec<Rc<RefCell<Element>>>>,
         parent: Rc<RefCell<Element>>,
@@ -57,172 +60,19 @@ pub enum Element {
     Root(Vec<Rc<RefCell<Element>>>),
 }
 
-lazy_static::lazy_static! {
-    static ref TAGS: HashSet<&'static str> = HashSet::from([
-        "a",
-        "abbr",
-        "address",
-        "area",
-        "article",
-        "aside",
-        "audio",
-        "b",
-        "base",
-        "bdi",
-        "bdo",
-        "blockquote",
-        "body",
-        "br",
-        "button",
-        "canvas",
-        "caption",
-        "cite",
-        "code",
-        "col",
-        "colgroup",
-        "data",
-        "datalist",
-        "dd",
-        "del",
-        "details",
-        "dfn",
-        "dialog",
-        "div",
-        "dl",
-        "dt",
-        "em",
-        "embed",
-        "fieldset",
-        "figure",
-        "footer",
-        "form",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "head",
-        "header",
-        "hgroup",
-        "hr",
-        "html",
-        "i",
-        "iframe",
-        "img",
-        "input",
-        "ins",
-        "kbd",
-        "keygen",
-        "label",
-        "legend",
-        "li",
-        "link",
-        "main",
-        "map",
-        "mark",
-        "menu",
-        "menuitem",
-        "meta",
-        "meter",
-        "nav",
-        "noscript",
-        "object",
-        "ol",
-        "optgroup",
-        "option",
-        "output",
-        "p",
-        "param",
-        "pre",
-        "progress",
-        "q",
-        "rb",
-        "rp",
-        "rt",
-        "rtc",
-        "ruby",
-        "s",
-        "samp",
-        "script",
-        "section",
-        "select",
-        "small",
-        "source",
-        "span",
-        "strong",
-        "style",
-        "sub",
-        "summary",
-        "sup",
-        "table",
-        "tbody",
-        "td",
-        "template",
-        "textarea",
-        "tfoot",
-        "th",
-        "thead",
-        "time",
-        "title",
-        "tr",
-        "track",
-        "u",
-        "ul",
-        "var",
-        "video",
-        "wbr",
-    ]);
+/// Append Element Type
+enum AET {
+    Push,
+    Extend,
+    OptionalExtend,
 }
 
 impl Element {
-    pub fn attributes(&self) -> String {
-        let mut result = Vec::new();
-        if let Element::Tag {
-            attrs,
-            spread,
-            captures,
-            ..
-        } = self
-        {
-            for (name, value) in attrs.iter() {
-                result.push(format!(
-                    "{}{}",
-                    name,
-                    match value {
-                        Attribute::Value(val) => format!("={:?}", val),
-                        Attribute::Capture(_) => "={}".to_string(),
-                        _ => String::new(),
-                    }
-                ))
-            }
-
-            for _ in captures.iter() {
-                result.push("{}".to_string())
-            }
-
-            match spread {
-                Some(_) => result.push("{}".to_string()),
-                None => {}
-            };
-        }
-        if result.len() > 0 {
-            result.insert(0, String::new());
-        }
-        result.join(" ")
-    }
-
-    pub fn is_component(&self) -> bool {
-        if let Element::Tag { tag, .. } = self {
-            return TAGS.contains(tag.as_str());
-        }
-        false
-    }
-
-    pub fn args(&self) -> Option<String> {
+    fn to_token_stream(&self) -> (AET, TokenStream2) {
+        let mut tokens = TokenStream2::new();
+        let mut extend = AET::Push;
         match self {
-            Element::Capture(val) => Some(format!("{{{}}}", val)),
-            Element::Tag {
+            Self::Tag {
                 tag,
                 attrs,
                 spread,
@@ -230,197 +80,213 @@ impl Element {
                 children,
                 ..
             } => {
-                if self.is_component() {
-                    // Anything that is capture, spread, children that are not html tags
-                    let mut result = Vec::new();
-                    // attrs with capture
-                    for (_, value) in attrs.iter() {
-                        if let Attribute::Capture(cap) = value {
-                            result.push(format!("{{{}}}", cap))
-                        }
-                    }
-                    // Capture free attrs
-                    for capture in captures {
-                        result.push(format!("{{{}}}", capture))
-                    }
-                    // spread
-                    match spread {
-                        Some(spread) => result.push(format!("{}.to_attributes()", spread)),
-                        None => {}
-                    };
-                    // children
-                    if let Some(children) = children {
-                        for child in children {
-                            if let Some(args) = child.borrow().args() {
-                                result.push(args)
-                            }
-                        }
-                    }
-
-                    if result.len() > 0 {
-                        Some(result.join(", "))
-                    } else {
-                        None
-                    }
-                } else {
-                    // Props
-                    Some(format!(
-                        "{}.create_component(Props::from(([{}], [{}], [{}], {})))",
-                        tag.replace("-", "_"),
-                        attrs
-                            .iter()
-                            .map(|(name, value)| format!(
-                                "({:?}, Box::new({:?}))",
-                                name.to_string(),
-                                value.to_string()
-                            ))
-                            .collect::<Vec<String>>()
-                            .join(", "),
-                        captures
-                            .iter()
-                            .map(|v| format!("Box::new({{{}}})", v))
-                            .collect::<Vec<String>>()
-                            .join(", "),
-                        match children {
-                            Some(children) => {
-                                children
-                                    .iter()
-                                    .filter_map(|v| {
-                                        if v.borrow().is_component() {
-                                            v.borrow().args()
-                                        } else {
-                                            v.borrow().args().map(|r| {
-                                                format!(
-                                                    r#"format!({:?}, {})"#,
-                                                    v.borrow().to_string(),
-                                                    r
-                                                )
-                                            })
-                                        }
-                                    })
-                                    .collect::<Vec<String>>()
-                                    .join(", ")
-                            }
-                            None => String::new(),
-                        },
-                        match spread {
-                            Some(spread) => format!("Some({})", spread),
-                            None => "None::<Vec<(&str, &str)>>".to_string(),
-                        }
-                    ))
+                let mut attributes = String::from("[");
+                for (name, value) in attrs.iter() {
+                    attributes.push_str(
+                        format!(
+                            "({:?}.to_string(), {:?}.to_string()),",
+                            name,
+                            value.to_string()
+                        )
+                        .as_str(),
+                    );
                 }
-            }
-            _ => None,
-        }
-    }
-
-    pub fn display(&self, offset: usize) -> String {
-        let indent = (0..offset).map(|_| ' ').collect::<String>();
-        match self {
-            Element::Capture(_) => indent + "{}",
-            Element::Comment(_) => String::new(),
-            Element::Text(text) => indent + text,
-            // Root shouldn't be nested so it will be ignored
-            Element::Root(_) => String::new(),
-            Element::Tag { tag, children, .. } => {
-                if self.is_component() {
-                    let (sc, c, ct) = match children {
-                        None => (" /", String::new(), String::new()),
-                        Some(children) if children.len() == 0 => {
-                            ("", String::new(), format!("</{}>", tag))
-                        }
-                        Some(children) => (
-                            "",
-                            String::from("\n")
-                                + children
-                                    .iter()
-                                    .map(|c| c.borrow().display(offset + 4))
-                                    .collect::<Vec<String>>()
-                                    .join("\n")
-                                    .as_str(),
-                            format!("\n{}</{}>", indent, tag),
-                        ),
-                    };
-
-                    format!(
-                        r#"{indent}<{}{}{}>{}{}"#,
-                        tag,
-                        self.attributes(),
-                        sc,
-                        c,
-                        ct,
-                        indent = indent
+                for capture in captures {
+                    attributes.push_str(
+                        format!(r#"({{{}}}.to_string(), "yes".to_string()),"#, capture).as_str(),
                     )
+                }
+                attributes.push_str("]");
+
+                if let Some(spread) = spread {
+                    if attributes.len() > 2 {
+                        attributes = format!(
+                            r#"{{let mut attrs = {}.into_attrs();attrs.extend({});attrs}}"#,
+                            spread, attributes
+                        );
+                    } else {
+                        attributes = spread.to_string()
+                    }
+                }
+
+                if tag.as_str() == "for" {
+                    // TODO: insure let binding and one capture child
+                    // inject all other children around the outer item
+                    let mut lbinding: Option<String> = None;
+                    for attr in attrs.keys() {
+                        if attr.as_str().starts_with("let:") {
+                            if None != lbinding || attr.len() < 4 {
+                                abort!(
+                                    Span::call_site(),
+                                    "Invalid let binding";
+                                    help="{}", if None != lbinding {
+                                        "Try removing the extra let binding"
+                                    } else {
+                                        "Try adding a name after `let:`"
+                                    }
+                                );
+                            }
+                            lbinding = Some((&attr[4..]).to_string());
+                        }
+                    }
+
+                    let mut found = false;
+                    let mut handler: Option<TokenStream2> = None;
+
+                    let mut before = TokenStream2::new();
+                    let mut after = TokenStream2::new();
+
+                    match children {
+                        None => {}
+                        Some(children) => {
+                            for child in children {
+                                match &*child.borrow() {
+                                    Element::Capture(capture) if !found => {
+                                        handler = Some(capture.clone());
+                                        found = true;
+                                    }
+                                    other => {
+                                        let (e, t) = other.to_token_stream();
+                                        let chld = if let AET::OptionalExtend = e {
+                                            quote!(match #t {
+                                                Some(values) => _t.extend(values),
+                                                None => {}
+                                            };)
+                                        } else if let AET::Extend = e {
+                                            quote!(_t.extend(#t);)
+                                        } else {
+                                            quote!(_t.push(#t);)
+                                        };
+
+                                        if found {
+                                            after.append_all(chld);
+                                        } else {
+                                            before.append_all(chld)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    };
+
+                    match handler {
+                        Some(handler) => {
+                            let binding = Ident::new(lbinding.unwrap().as_str(), Span::call_site());
+                            tokens.append_all(quote!(
+                                {
+                                    let mut _t: Vec<Element> = Vec::new();
+                                    let _items = #binding.iter().map(#handler).collect::<Vec<Element>>();
+                                    for _item in _items {
+                                        #before
+                                        _t.push(_item);
+                                        #after
+                                    }
+                                    _t
+                                }
+                            ));
+                            extend = AET::Extend;
+                        }
+                        None => {
+                            abort!(
+                                Span::call_site(),
+                                "Must have at least one handler closure defined in a `for` element"
+                            )
+                        }
+                    }
+                } else if TAGS.contains(tag.as_str()) {
+                    if attributes.len() == 2 {
+                        attributes = "None".to_string();
+                    }
+
+                    let attributes = attributes.parse::<TokenStream2>().unwrap_or(quote!(None));
+
+                    let chldrn = match children {
+                        None => quote!(None),
+                        Some(children) => {
+                            let mut chts = TokenStream2::new();
+                            for child in children {
+                                let (e, t) = child.borrow().to_token_stream();
+                                if let AET::OptionalExtend = e {
+                                    chts.append_all(quote!(match #t {
+                                        Some(values) => _t.extend(values),
+                                        None => {}
+                                    };))
+                                } else if let AET::Extend = e {
+                                    chts.append_all(quote!(_t.extend(#t);))
+                                } else {
+                                    chts.append_all(quote!(_t.push(#t);))
+                                }
+                            }
+                            quote!({
+                                let mut _t: Vec<Element> = Vec::new();
+                                #chts
+                                _t
+                            })
+                        }
+                    };
+
+                    tokens.append_all(quote! {
+                        Element::tag(#tag, #attributes, #chldrn)
+                    })
                 } else {
-                    format!("{}{{}}", indent)
+                    let tag = tag.replace("-", "_").parse::<TokenStream2>().unwrap();
+
+                    let chldrn = match children {
+                        None => quote!(Vec::new()),
+                        Some(children) => {
+                            let mut chts = TokenStream2::new();
+                            for child in children {
+                                let (e, t) = child.borrow().to_token_stream();
+                                if let AET::OptionalExtend = e {
+                                    chts.append_all(quote!(match #t {
+                                        Some(values) => _t.extend(values),
+                                        None => {}
+                                    };))
+                                } else if let AET::Extend = e {
+                                    chts.append_all(quote!(_t.extend(#t);))
+                                } else {
+                                    chts.append_all(quote!(_t.push(#t);))
+                                }
+                            }
+                            quote!({
+                                let mut _t: Vec<Element> = Vec::new();
+                                #chts
+                                _t
+                            })
+                        }
+                    };
+
+                    let attributes = attributes.parse::<TokenStream2>().unwrap();
+                    tokens.append_all(quote!(
+                        #tag.create_component(#attributes.into_attrs(), #chldrn)
+                    ));
                 }
             }
-        }
-    }
-    pub fn debug(&self, offset: usize) -> String {
-        let indent = (0..offset).map(|_| ' ').collect::<String>();
-        match self {
-            Element::Capture(_) => indent + "Capture",
-            Element::Comment(_) => indent + "Comment",
-            Element::Text(_) => indent + "Text",
-            Element::Root(_) => indent + "Root",
-            Element::Tag {
-                tag: name,
-                attrs,
-                spread,
-                captures,
-                children,
-                ..
-            } => {
-                format!(
-                    r#"{indent}Element::{}({}){}{}{}{}"#,
-                    name,
-                    match children {
-                        Some(cldrn) => cldrn.len(),
-                        None => 0,
-                    },
-                    if attrs.len() > 0 {
-                        format!("\n{}  - attrs: {}", indent, attrs.len())
-                    } else {
-                        String::new()
-                    },
-                    if captures.len() > 0 {
-                        format!("\n{}  - captures: {}", indent, captures.len())
-                    } else {
-                        String::new()
-                    },
-                    match spread {
-                        Some(spread) => format!("\n{}  - Spread: {:?}", indent, spread),
-                        None => String::new(),
-                    },
-                    match children {
-                        Some(children) => {
-                            String::from("\n")
-                                + children
-                                    .iter()
-                                    .map(|c| c.borrow().debug(offset + 2))
-                                    .collect::<Vec<String>>()
-                                    .join("\n")
-                                    .as_str()
-                        }
-                        None => String::new(),
-                    },
-                    indent = indent,
-                )
+            Self::Text(text) => tokens.append_all(quote!(Element::text(#text))),
+            Self::Comment(comment) => tokens.append_all(quote!(Element::comment(#comment))),
+            Self::Capture(capture) => {
+                tokens.append_all(quote!({#capture}.into_children()));
+                extend = AET::OptionalExtend;
             }
-        }
-    }
-}
-
-impl Display for Element {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display(0))
+            _ => {}
+        };
+        (extend, tokens)
     }
 }
 
 impl Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.debug(0))
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Tag { tag, .. } => tag.to_string(),
+                Self::Text(_) => String::from("Text"),
+                Self::Comment(_) => String::from("Comment"),
+                Self::Capture(_) => String::from("Capture"),
+                Self::Root(_) => String::from("Root"),
+            }
+        )
     }
 }
 
@@ -429,40 +295,46 @@ pub struct Segment {
     children: Vec<Rc<RefCell<Element>>>,
 }
 
-impl Debug for Segment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for element in self.children.iter() {
-            write!(f, "{:?}\n", element.borrow())?;
-        }
-        Ok(())
-    }
-}
-
-impl Display for Segment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for element in self.children.iter() {
-            write!(f, "{}\n", element.borrow())?;
-        }
-        Ok(())
-    }
-}
-
 impl ToTokens for Segment {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let mut result = Vec::new();
-        for child in self.children.iter() {
-            result.push(format!("{}", child.borrow()));
-        }
-        let result = result.join("\n");
-        let args = self.args().parse::<TokenStream2>().unwrap();
+        let children: Vec<(AET, TokenStream2)> = self
+            .children
+            .iter()
+            .map(|c| c.borrow().to_token_stream())
+            .collect();
+
+        let default = quote!(Element::None);
+        let result = if children.len() == 0 {
+            default
+        } else if children.len() > 1 {
+            let mut chts = TokenStream2::new();
+            for child in children {
+                let result = child.1;
+                if let AET::OptionalExtend = child.0 {
+                    chts.append_all(quote!(match #result {
+                        Some(values) => _t.extend(values),
+                        None => {}
+                    };));
+                } else if let AET::Extend = child.0 {
+                    chts.append_all(quote!(_t.extend(#result);))
+                } else {
+                    chts.append_all(quote!(_t.push(#result);))
+                }
+            }
+            quote!(Element::tag("", None, {
+                let mut _t: Vec<Element> = Vec::new();
+                #chts
+                _t
+            }))
+        } else {
+            let first = children.first().map(|v| v.1.clone()).unwrap_or(default);
+            quote!(#first)
+        };
+
         tokens.append_all(quote! {
             {
-                use tela_html::{ToAttributes, ToAttrValue, Props, Component};
-
-                format!(
-                    #result,
-                    #args
-                )
+                use tela_html::prelude::*;
+                #result
             }
         });
     }
@@ -477,17 +349,6 @@ macro_rules! Eat {
 }
 
 impl Segment {
-    fn args(&self) -> String {
-        self.children
-            .iter()
-            .filter_map(|c| {
-                let args = c.borrow().args();
-                args
-            })
-            .collect::<Vec<String>>()
-            .join(", ")
-    }
-
     fn parse_comment(input: ParseStream) -> syn::Result<Element> {
         Eat![input, !--];
         let result = Element::Comment(input.parse::<LitStr>()?.value());
@@ -498,7 +359,7 @@ impl Segment {
     fn close_element(input: ParseStream, stack: &mut Vec<String>) -> syn::Result<()> {
         input.parse::<Token![/]>()?;
         let mut name = Vec::new();
-        let first = input.parse::<Ident>()?;
+        let first = Ident::parse_any(input)?;
         name.push(first.to_string());
         loop {
             if input.peek(Token![-]) {
@@ -510,7 +371,7 @@ impl Segment {
             } else {
                 break;
             }
-            name.push(input.parse::<Ident>()?.to_string())
+            name.push(Ident::parse_any(input)?.to_string())
         }
         Eat![input, >];
 
@@ -536,7 +397,7 @@ impl Segment {
     }
 
     fn parse_attr(input: ParseStream) -> syn::Result<(String, Attribute)> {
-        let mut name = input.parse::<Ident>()?.to_string();
+        let mut name = Ident::parse_any(input)?.to_string();
         loop {
             if input.peek(Token![-]) {
                 input.parse::<Token![-]>()?;
@@ -547,8 +408,9 @@ impl Segment {
             } else {
                 break;
             }
-            name.push_str(input.parse::<Ident>()?.to_string().as_str())
+            name.push_str(Ident::parse_any(input)?.to_string().as_str())
         }
+
         let value = if input.peek(Token![=]) {
             let equal = input.parse::<Token![=]>()?;
             // String literal
@@ -573,7 +435,7 @@ impl Segment {
     ) -> syn::Result<(
         HashMap<String, Attribute>,
         Vec<TokenStream2>,
-        Option<String>,
+        Option<TokenStream2>,
     )> {
         // Start with:
         // - Block ({...spread}) ~ Must contain an ellipse and then an ident
@@ -596,7 +458,7 @@ impl Segment {
                 braced!(braces in input);
                 if braces.peek(Token![..]) {
                     braces.parse::<Token![..]>()?;
-                    spread = Some(braces.parse::<Ident>()?.to_string());
+                    spread = Some(braces.parse::<TokenStream2>()?);
                 } else {
                     captures.push(braces.parse::<TokenStream2>()?)
                 }
@@ -615,21 +477,20 @@ impl Segment {
         stack: &mut Vec<String>,
         parent: Rc<RefCell<Element>>,
     ) -> syn::Result<Rc<RefCell<Element>>> {
-        let mut name = vec![input.parse::<Ident>()?.to_string()];
+        let mut name = Ident::parse_any(input)?.to_string();
         loop {
             if input.peek(Token![-]) {
                 input.parse::<Token![-]>()?;
-                name.push("-".to_string())
+                name.push_str("-")
             } else if input.peek(Token![:]) {
                 input.parse::<Token![:]>()?;
-                name.push(":".to_string())
+                name.push_str(":")
             } else {
                 break;
             }
-            name.push(input.parse::<Ident>()?.to_string())
+            name.push_str(Ident::parse_any(input)?.to_string().as_str())
         }
 
-        let name = name.join("-");
         let (attrs, captures, spread) = Segment::parse_props_attrs(input)?;
 
         if input.peek(Token![/]) {

@@ -1,28 +1,41 @@
-/*
- *  <div item=3>
- *      {some_var}
- *  </div>
- */
+use std::{any::Any, collections::HashMap, fmt::Display};
 
-use std::{collections::HashMap, fmt::Display};
+pub mod element;
+pub mod prelude;
 
-// use tela_html::components::*
+pub use element::Element;
 pub use proc::html;
+
+#[macro_export]
+macro_rules! props {
+    ($($key: ident: $value: expr),* $(,)?) => {
+        [$((stringify!($key).replace("_", "-"),$value.to_string()),)*]
+    };
+}
 
 pub trait ToAttrValue {
     fn to_attr_value(&self) -> Option<String>;
 }
 
-pub trait Component<T, R> {
-    fn create_component(&self, props: T) -> R;
+pub trait Component {
+    fn create_component(
+        &self,
+        attributes: HashMap<String, String>,
+        children: Vec<Element>,
+    ) -> Element;
 }
 
-impl<F> Component<Props, String> for F
+impl<F> Component for F
 where
-    F: Fn(Props) -> String,
+    F: Fn(Props) -> Element,
 {
-    fn create_component(&self, props: Props) -> String {
-        self(props)
+    fn create_component(
+        &self,
+        attributes: HashMap<String, String>,
+        children: Vec<Element>,
+    ) -> Element {
+        // let callback: fn(dyn Any) -> Element = |v| Element::None;
+        self(Props::new(attributes, children))
     }
 }
 
@@ -42,18 +55,6 @@ where
     }
 }
 
-pub trait ToSpread {
-    fn to_spread(self) -> HashMap<String, String>;
-}
-
-impl<A: Display, B: Display, I: IntoIterator<Item = (A, B)>> ToSpread for I {
-    fn to_spread(self) -> HashMap<String, String> {
-        self.into_iter()
-            .map(|(name, value)| (name.to_string(), value.to_string()))
-            .collect()
-    }
-}
-
 pub trait ToAttributes {
     fn to_attributes(self) -> String;
 }
@@ -70,73 +71,19 @@ impl<A: Display, B: Display, I: IntoIterator<Item = (A, B)>> ToAttributes for I 
 #[derive(Debug, Clone, Default)]
 pub struct Props {
     props: HashMap<String, String>,
-    children: Vec<String>,
-    captures: Vec<String>,
+    children: Vec<Element>,
 }
 
 impl Props {
-    pub fn attributes(&self) -> String {
-        let mut result = self.captures.clone();
-        let props = self
-            .props
-            .iter()
-            .filter_map(|(name, value)| value.to_attr_value().map(|v| format!("{}{}", name, v)))
-            .collect::<Vec<String>>()
-            .join(" ");
-        if !props.is_empty() {
-            result.push(props)
-        }
-        result.join(" ")
+    pub fn new(props: HashMap<String, String>, children: Vec<Element>) -> Self {
+        Props { props, children }
     }
 
-    pub fn children(&self) -> &Vec<String> {
+    pub fn children(&self) -> &Vec<Element> {
         &self.children
     }
 
     pub fn get(&self, key: &str) -> Option<&String> {
         self.props.get(key)
-    }
-}
-
-impl<T: ToSpread, const S1: usize, const S3: usize, const S4: usize>
-    From<(
-        [(&str, Box<dyn Display>); S1],
-        [Box<dyn Display>; S3],
-        [String; S4],
-        Option<T>,
-    )> for Props
-{
-    fn from(
-        value: (
-            [(&str, Box<dyn Display>); S1],
-            [Box<dyn Display>; S3],
-            [String; S4],
-            Option<T>,
-        ),
-    ) -> Self {
-        let mut props = Props::default();
-        for (name, value) in value.0 {
-            props.props.insert(name.to_string(), value.to_string());
-        }
-        for capture in value.1 {
-            props.captures.push(capture.to_string())
-        }
-        props.children.extend_from_slice(&value.2);
-        match value.3 {
-            None => {}
-            Some(val) => {
-                let value = val.to_spread();
-                for (name, value) in value.iter() {
-                    if name.starts_with(":") {
-                        props
-                            .props
-                            .insert((&name[1..]).to_string(), value.to_string());
-                    } else {
-                        props.props.insert(name.to_string(), value.to_string());
-                    }
-                }
-            }
-        }
-        props
     }
 }
