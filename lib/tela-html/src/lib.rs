@@ -1,10 +1,91 @@
-use std::{any::Any, collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, hash::Hash};
 
 pub mod element;
 pub mod prelude;
 
 pub use element::Element;
 pub use proc::html;
+use serde::{Deserialize, Serialize};
+
+macro_rules! impl_prop {
+    ([$($name: ty),* $(,)?]) => {
+        $(
+            impl ToProp for $name {
+                 fn to_prop(&self) -> String {
+                     self.to_string()
+                 }
+            }
+
+            impl<'a> FromProp<'a> for $name {
+                fn from_prop(prop: &'a String) -> Result<Self, String> {
+                    prop.parse::<$name>().map_err(|e| e.to_string())
+                }
+            }
+        )*
+    };
+}
+
+pub trait FromProp<'a>
+where
+    Self: Sized,
+{
+    fn from_prop(prop: &'a String) -> Result<Self, String>;
+}
+
+impl<'a, T: Prop<'a>> FromProp<'a> for T {
+    fn from_prop(prop: &'a String) -> Result<Self, String> {
+        serde_json::from_str(prop.as_str()).map_err(|e| e.to_string())
+    }
+}
+
+pub trait ToProp
+where
+    Self: Sized,
+{
+    fn to_prop(&self) -> String;
+}
+
+impl<'a, T: Prop<'a>> ToProp for T {
+    fn to_prop(&self) -> String {
+        match serde_json::to_string(self) {
+            Ok(value) => value,
+            Err(e) => e.to_string(),
+        }
+    }
+}
+
+impl<'a> FromProp<'a> for String {
+    fn from_prop(prop: &'a String) -> Result<Self, String> {
+        Ok(prop.clone())
+    }
+}
+
+impl ToProp for String {
+    fn to_prop(&self) -> String {
+        self.clone()
+    }
+}
+
+impl<'a> FromProp<'a> for &'a str {
+    fn from_prop(prop: &'a String) -> Result<Self, String> {
+        Ok(prop.as_str())
+    }
+}
+
+impl ToProp for &str {
+    fn to_prop(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl_prop!([i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool]);
+
+pub trait Prop<'a>: Serialize + Deserialize<'a> {}
+
+impl<'a, A: Serialize + Deserialize<'a> + Hash + Eq, B: Serialize + Deserialize<'a>> Prop<'a>
+    for HashMap<A, B>
+{
+}
 
 #[macro_export]
 macro_rules! props {
@@ -83,7 +164,14 @@ impl Props {
         &self.children
     }
 
-    pub fn get(&self, key: &str) -> Option<&String> {
-        self.props.get(key)
+    pub fn fetch<'a, T: FromProp<'a>>(&'a self, key: &str) -> Result<T, String> {
+        match self.props.get(key) {
+            Some(value) => T::from_prop(value),
+            None => Err(format!("Key not found in props: {}", key)),
+        }
+    }
+
+    pub fn get(&self, key: &str) -> Option<String> {
+        self.props.get(key).map(|v| v.clone())
     }
 }

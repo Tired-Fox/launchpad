@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 lazy_static::lazy_static! {
     pub static ref TAGS: HashSet<&'static str> = HashSet::from([
+        "DOCTYPE",
         "a",
         "abbr",
         "address",

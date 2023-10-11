@@ -2,7 +2,7 @@ use proc_macro2::Span;
 use std::{
     cell::RefCell,
     collections::HashMap,
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Formatter},
     rc::Rc,
 };
 
@@ -35,11 +35,29 @@ impl Display for Attribute {
             f,
             "{}",
             match self {
-                Self::Yes => String::from("yes"),
-                Self::Capture(capture) => format!("{{{}}}", capture),
+                Self::Yes => String::from("\"yes\""),
+                Self::Capture(capture) => capture.to_string(),
                 Self::Value(value) => format!("{:?}", value),
             }
         )
+    }
+}
+
+#[derive(Clone)]
+pub struct Spanned<T: Clone>(pub Span, pub T);
+impl<T: Clone> Spanned<T> {
+    pub fn span(&self) -> &Span {
+        &self.0
+    }
+
+    pub fn inner(&self) -> &T {
+        &self.1
+    }
+}
+
+impl<T: Clone + Display> Display for Spanned<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner())
     }
 }
 
@@ -50,10 +68,11 @@ pub enum Element {
     Text(String),
     Comment(String),
     Tag {
-        tag: String,
-        attrs: HashMap<String, Attribute>,
-        spread: Option<TokenStream2>,
-        captures: Vec<TokenStream2>,
+        decl: bool,
+        tag: Spanned<String>,
+        attrs: HashMap<String, Spanned<Attribute>>,
+        spread: Option<Spanned<TokenStream2>>,
+        captures: Vec<Spanned<TokenStream2>>,
         children: Option<Vec<Rc<RefCell<Element>>>>,
         parent: Rc<RefCell<Element>>,
     },
@@ -78,22 +97,20 @@ impl Element {
                 spread,
                 captures,
                 children,
+                decl,
                 ..
             } => {
                 let mut attributes = String::from("[");
                 for (name, value) in attrs.iter() {
                     attributes.push_str(
-                        format!(
-                            "({:?}.to_string(), {:?}.to_string()),",
-                            name,
-                            value.to_string()
-                        )
-                        .as_str(),
+                        format!("({:?}.to_string(), {}.to_prop()),", name, value.to_string())
+                            .as_str(),
                     );
                 }
                 for capture in captures {
                     attributes.push_str(
-                        format!(r#"({{{}}}.to_string(), "yes".to_string()),"#, capture).as_str(),
+                        format!(r#"({}.to_string(), "yes".to_string()),"#, capture.inner())
+                            .as_str(),
                     )
                 }
                 attributes.push_str("]");
@@ -109,15 +126,13 @@ impl Element {
                     }
                 }
 
-                if tag.as_str() == "for" {
-                    // TODO: insure let binding and one capture child
-                    // inject all other children around the outer item
+                if tag.inner().as_str() == "for" {
                     let mut lbinding: Option<String> = None;
-                    for attr in attrs.keys() {
+                    for (attr, value) in attrs.iter() {
                         if attr.as_str().starts_with("let:") {
                             if None != lbinding || attr.len() < 4 {
                                 abort!(
-                                    Span::call_site(),
+                                    value.span(),
                                     "Invalid let binding";
                                     help="{}", if None != lbinding {
                                         "Try removing the extra let binding"
@@ -188,12 +203,12 @@ impl Element {
                         }
                         None => {
                             abort!(
-                                Span::call_site(),
-                                "Must have at least one handler closure defined in a `for` element"
+                                tag.span(),
+                                "Must have one child closure that is captured inside a `for` element"
                             )
                         }
                     }
-                } else if TAGS.contains(tag.as_str()) {
+                } else if TAGS.contains(tag.inner().as_str()) {
                     if attributes.len() == 2 {
                         attributes = "None".to_string();
                     }
@@ -225,11 +240,16 @@ impl Element {
                         }
                     };
 
+                    let tag = tag.inner();
                     tokens.append_all(quote! {
-                        Element::tag(#tag, #attributes, #chldrn)
+                        Element::tag(#decl, #tag, #attributes, #chldrn)
                     })
                 } else {
-                    let tag = tag.replace("-", "_").parse::<TokenStream2>().unwrap();
+                    let tag = tag
+                        .inner()
+                        .replace("-", "_")
+                        .parse::<TokenStream2>()
+                        .unwrap();
 
                     let chldrn = match children {
                         None => quote!(Vec::new()),
@@ -321,11 +341,13 @@ impl ToTokens for Segment {
                     chts.append_all(quote!(_t.push(#result);))
                 }
             }
-            quote!(Element::tag("", None, {
-                let mut _t: Vec<Element> = Vec::new();
-                #chts
-                _t
-            }))
+            quote!(
+                Element::Wrapper({
+                    let mut _t: Vec<Element> = Vec::new();
+                    #chts
+                    _t
+                })
+            )
         } else {
             let first = children.first().map(|v| v.1.clone()).unwrap_or(default);
             quote!(#first)
@@ -396,8 +418,9 @@ impl Segment {
         Ok(())
     }
 
-    fn parse_attr(input: ParseStream) -> syn::Result<(String, Attribute)> {
-        let mut name = Ident::parse_any(input)?.to_string();
+    fn parse_attr(input: ParseStream) -> syn::Result<(String, Spanned<Attribute>)> {
+        let first = Ident::parse_any(input)?;
+        let mut name = first.to_string();
         loop {
             if input.peek(Token![-]) {
                 input.parse::<Token![-]>()?;
@@ -427,15 +450,15 @@ impl Segment {
         } else {
             Attribute::Yes
         };
-        Ok((name, value))
+        Ok((name, Spanned(first.span(), value)))
     }
 
     fn parse_props_attrs(
         input: ParseStream,
     ) -> syn::Result<(
-        HashMap<String, Attribute>,
-        Vec<TokenStream2>,
-        Option<TokenStream2>,
+        HashMap<String, Spanned<Attribute>>,
+        Vec<Spanned<TokenStream2>>,
+        Option<Spanned<TokenStream2>>,
     )> {
         // Start with:
         // - Block ({...spread}) ~ Must contain an ellipse and then an ident
@@ -458,9 +481,9 @@ impl Segment {
                 braced!(braces in input);
                 if braces.peek(Token![..]) {
                     braces.parse::<Token![..]>()?;
-                    spread = Some(braces.parse::<TokenStream2>()?);
+                    spread = Some(Spanned(braces.span(), braces.parse::<TokenStream2>()?));
                 } else {
-                    captures.push(braces.parse::<TokenStream2>()?)
+                    captures.push(Spanned(braces.span(), braces.parse::<TokenStream2>()?));
                 }
             } else {
                 return Err(syn::Error::new(
@@ -477,7 +500,10 @@ impl Segment {
         stack: &mut Vec<String>,
         parent: Rc<RefCell<Element>>,
     ) -> syn::Result<Rc<RefCell<Element>>> {
-        let mut name = Ident::parse_any(input)?.to_string();
+        let decl = input.peek(Token![!]);
+        let _ = input.parse::<Token![!]>();
+        let first = Ident::parse_any(input)?;
+        let mut name = first.to_string();
         loop {
             if input.peek(Token![-]) {
                 input.parse::<Token![-]>()?;
@@ -493,12 +519,28 @@ impl Segment {
 
         let (attrs, captures, spread) = Segment::parse_props_attrs(input)?;
 
-        if input.peek(Token![/]) {
+        if decl {
+            Eat![input, >];
+            Segment::append(
+                parent.clone(),
+                Element::Tag {
+                    decl: true,
+                    tag: Spanned(first.span(), name),
+                    attrs,
+                    captures,
+                    spread,
+                    children: None,
+                    parent: parent.clone(),
+                },
+            );
+            Ok(parent.clone())
+        } else if input.peek(Token![/]) {
             Eat![input, />];
             Segment::append(
                 parent.clone(),
                 Element::Tag {
-                    tag: name,
+                    decl: false,
+                    tag: Spanned(first.span(), name),
                     attrs,
                     captures,
                     spread,
@@ -513,7 +555,8 @@ impl Segment {
             Ok(Segment::append(
                 parent.clone(),
                 Element::Tag {
-                    tag: name,
+                    decl: false,
+                    tag: Spanned(first.span(), name),
                     attrs,
                     captures,
                     spread,
