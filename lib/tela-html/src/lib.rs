@@ -4,7 +4,7 @@ pub mod element;
 pub mod prelude;
 
 pub use element::Element;
-pub use proc::html;
+pub use proc::{html, Prop};
 use serde::{Deserialize, Serialize};
 
 macro_rules! impl_prop {
@@ -16,8 +16,8 @@ macro_rules! impl_prop {
                  }
             }
 
-            impl<'a> FromProp<'a> for $name {
-                fn from_prop(prop: &'a String) -> Result<Self, String> {
+            impl FromProp for $name {
+                fn from_prop(prop: String) -> Result<Self, String> {
                     prop.parse::<$name>().map_err(|e| e.to_string())
                 }
             }
@@ -25,16 +25,16 @@ macro_rules! impl_prop {
     };
 }
 
-pub trait FromProp<'a>
+pub trait FromProp
 where
     Self: Sized,
 {
-    fn from_prop(prop: &'a String) -> Result<Self, String>;
+    fn from_prop(prop: String) -> Result<Self, String>;
 }
 
-impl<'a, T: Prop<'a>> FromProp<'a> for T {
-    fn from_prop(prop: &'a String) -> Result<Self, String> {
-        serde_json::from_str(prop.as_str()).map_err(|e| e.to_string())
+impl<T: Prop> FromProp for T {
+    fn from_prop(prop: String) -> Result<Self, String> {
+        serde_json::from_str(Box::leak(prop.into_boxed_str())).map_err(|e| e.to_string())
     }
 }
 
@@ -45,7 +45,7 @@ where
     fn to_prop(&self) -> String;
 }
 
-impl<'a, T: Prop<'a>> ToProp for T {
+impl<T: Prop> ToProp for T {
     fn to_prop(&self) -> String {
         match serde_json::to_string(self) {
             Ok(value) => value,
@@ -54,8 +54,8 @@ impl<'a, T: Prop<'a>> ToProp for T {
     }
 }
 
-impl<'a> FromProp<'a> for String {
-    fn from_prop(prop: &'a String) -> Result<Self, String> {
+impl FromProp for String {
+    fn from_prop(prop: String) -> Result<Self, String> {
         Ok(prop.clone())
     }
 }
@@ -66,9 +66,9 @@ impl ToProp for String {
     }
 }
 
-impl<'a> FromProp<'a> for &'a str {
-    fn from_prop(prop: &'a String) -> Result<Self, String> {
-        Ok(prop.as_str())
+impl FromProp for &'static str {
+    fn from_prop(prop: String) -> Result<Self, String> {
+        Ok(Box::leak(prop.into_boxed_str()))
     }
 }
 
@@ -80,9 +80,9 @@ impl ToProp for &str {
 
 impl_prop!([i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, bool]);
 
-pub trait Prop<'a>: Serialize + Deserialize<'a> {}
+pub trait Prop: Serialize + Deserialize<'static> {}
 
-impl<'a, A: Serialize + Deserialize<'a> + Hash + Eq, B: Serialize + Deserialize<'a>> Prop<'a>
+impl<A: Serialize + Deserialize<'static> + Hash + Eq, B: Serialize + Deserialize<'static>> Prop
     for HashMap<A, B>
 {
 }
@@ -164,9 +164,9 @@ impl Props {
         &self.children
     }
 
-    pub fn fetch<'a, T: FromProp<'a>>(&'a self, key: &str) -> Result<T, String> {
+    pub fn fetch<T: FromProp>(&self, key: &str) -> Result<T, String> {
         match self.props.get(key) {
-            Some(value) => T::from_prop(value),
+            Some(value) => T::from_prop(value.clone()),
             None => Err(format!("Key not found in props: {}", key)),
         }
     }

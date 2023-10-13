@@ -145,6 +145,10 @@ impl Element {
         Element::Comment(comment.to_string())
     }
 
+    pub fn wrapper<C: IntoIterator<Item = Element>>(children: C) -> Element {
+        Element::Wrapper(children.into_iter().collect())
+    }
+
     pub fn tag<S, A, C>(decl: bool, tag: S, attrs: A, children: C) -> Element
     where
         S: Display,
@@ -271,56 +275,67 @@ impl Element {
                 tag,
                 attrs,
                 children,
-            } => Some(format!(
-                "{indent}<{}{}{}{}>{}{}",
-                if *decl { "!" } else { "" },
-                tag,
-                or_new!(
-                    (attrs.len() > 0),
-                    format!(
-                        " {}",
-                        attrs
-                            .iter()
-                            .filter_map(|(name, value)| value
-                                .to_attr_value()
-                                .map(|val| format!("{}{}", name, val)))
-                            .collect::<Vec<String>>()
-                            .join(" "),
-                    )
-                ),
-                if let None = children {
-                    if !*decl {
-                        " /"
+            } => {
+                let all_str = if let Some(children) = children {
+                    children.iter().all(|c| if let Type::Text = c.etype() {true} else {false})
+                } else { true };
+                Some(format!(
+                    "{indent}<{}{}{}{}>{}{}",
+                    if *decl { "!" } else { "" },
+                    tag,
+                    or_new!(
+                        (attrs.len() > 0),
+                        format!(
+                            " {}",
+                            attrs
+                                .iter()
+                                .filter_map(|(name, value)| value
+                                    .to_attr_value()
+                                    .map(|val| format!("{}{}", name, val)))
+                                .collect::<Vec<String>>()
+                                .join(" "),
+                        )
+                    ),
+                    if let None = children {
+                        if !*decl {
+                            " /"
+                        } else {
+                            ""
+                        }
                     } else {
                         ""
-                    }
-                } else {
-                    ""
-                },
-                or_new!((let Some(children)=children) => (children.len() > 0),
-                    let mut result = Vec::new();
-                    let mut previous = Type::Other;
-                    for child in children.iter() {
-                        let (lead, value) = if let Type::Other = child.etype() {
-                            ("\n", child.display(offset+2))
-                        } else if let Type::Other = previous {
-                            ("\n", child.display(offset+2))
-                        } else {
-                            ("", child.display(0))
-                        };
+                    },
+                    or_new!((let Some(children)=children) => (children.len() > 0),
+                        let mut result = Vec::new();
+                        let mut previous = Type::Other;
 
-                        if let Some(value) = value {
-                            previous = child.etype();
-                            result.push(format!("{}{}", lead, value));
+                        for (i, child) in children.iter().enumerate() {
+                            let (lead, value) = if let Type::Other = child.etype() {
+                                ("\n", child.display(offset+2))
+                            } else if let Type::Other = previous {
+                                ("\n", child.display(offset+2))
+                            } else {
+                                ("", child.display(0))
+                            };
+
+                            if let Some(value) = value {
+                                previous = child.etype();
+                                result.push(format!("{}{}", if i > 0 {lead} else {""}, value));
+                            }
                         }
-                    }
-                    result.join("")
-                ),
-                or_new!((let Some(children) = children),
-                    format!("{}</{}>", or_new!((children.len() > 0), format!("\n{}", indent)) ,tag)
-                ),
-                indent = indent
-            )),
+
+                        if all_str {
+                            result.join("").trim().to_string()
+                        } else {
+                            format!("\n{}\n", result.join(""))
+                        }
+                    ),
+                    or_new!((let Some(children) = children),
+                        format!("{}</{}>", or_new!((children.len() > 0) => (!all_str), indent.clone()), tag)
+                    ),
+                    indent = indent
+                ))
+            },
         }
     }
 }

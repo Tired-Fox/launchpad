@@ -355,4 +355,4 @@ MigrationBackup/
 
 # Added by cargo
 
-/target
+**/target/*

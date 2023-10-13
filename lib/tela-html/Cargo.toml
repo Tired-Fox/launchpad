@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 proc = { path="lib/proc" }
-serde = "1.0.188"
+serde = { version="1.0.188", features=["derive"] }
 serde_json = "1.0.107"
 
 [features]
