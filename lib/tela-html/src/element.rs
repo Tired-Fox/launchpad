@@ -3,7 +3,7 @@ use std::{
     fmt::{Debug, Display},
 };
 
-use crate::ToAttrValue;
+use crate::{escape, ToAttrValue};
 
 macro_rules! or_new {
     (($($first: tt)*) $(=> ($($condition: tt)*))*, $($result: tt)*) => {
@@ -66,30 +66,22 @@ impl IntoAttrs for Option<&[(&str, &str)]> {
     }
 }
 
-pub trait IntoChildren {
+pub trait IntoChildren<T = ()> {
     fn into_children(&self) -> Option<Vec<Element>>;
 }
 
-macro_rules! into_children {
-    ([$($name: ty),* $(,)?]) => {
-        $(
-            impl IntoChildren for $name {
-                fn into_children(&self) -> Option<Vec<Element>> {
-                    Some(vec![Element::text(self)])
-                }
-            }
-        )*
-    };
-}
-
-into_children!([i8, i16, i32, i64, u8, u16, u32, u64, f32, f64, String, &str]);
-
-impl<F> IntoChildren for F
+impl<F> IntoChildren<Box<dyn FnOnce() -> Element>> for F
 where
     F: FnOnce() -> Element + Clone,
 {
     fn into_children(&self) -> Option<Vec<Element>> {
         Some(vec![(self.clone())()])
+    }
+}
+
+impl<T: Display> IntoChildren<Box<dyn Display>> for T {
+    fn into_children(&self) -> Option<Vec<Element>> {
+        Some(Vec::from([Element::Text(escape(self.to_string()))]))
     }
 }
 
@@ -277,8 +269,16 @@ impl Element {
                 children,
             } => {
                 let all_str = if let Some(children) = children {
-                    children.iter().all(|c| if let Type::Text = c.etype() {true} else {false})
-                } else { true };
+                    children.iter().all(|c| {
+                        if let Type::Text = c.etype() {
+                            true
+                        } else {
+                            false
+                        }
+                    })
+                } else {
+                    true
+                };
                 Some(format!(
                     "{indent}<{}{}{}{}>{}{}",
                     if *decl { "!" } else { "" },
@@ -335,7 +335,7 @@ impl Element {
                     ),
                     indent = indent
                 ))
-            },
+            }
         }
     }
 }
@@ -349,11 +349,8 @@ impl Debug for Element {
     }
 }
 
-impl Display for Element {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(value) = self.display(0) {
-            write!(f, "{}", value)?
-        }
-        Ok(())
+impl ToString for Element {
+    fn to_string(&self) -> String {
+        self.display(0).unwrap_or(String::new())
     }
 }

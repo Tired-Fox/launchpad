@@ -127,3 +127,9 @@ impl IntoBody<Full<Bytes>> for Value {
         Full::new(Bytes::from(self.to_string()))
     }
 }
+
+impl IntoBody<Full<Bytes>> for crate::html::Element {
+    fn into_body(self) -> Full<Bytes> {
+        Full::new(Bytes::from(self.to_string()))
+    }
+}

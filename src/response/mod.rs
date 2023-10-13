@@ -276,3 +276,23 @@ impl IntoResponse for Empty<Bytes> {
             .unwrap()
     }
 }
+
+impl IntoResponse for crate::html::Element {
+    fn into_response(self) -> HttpResponse<Full<Bytes>> {
+        hyper::Response::builder()
+            .status(200)
+            .header("Content-Type", "text/html")
+            .body(self.into_body())
+            .unwrap()
+    }
+}
+
+impl IntoResponse for serde_json::Value {
+    fn into_response(self) -> HttpResponse<Full<Bytes>> {
+        hyper::Response::builder()
+            .status(200)
+            .header("Content-Type", "application/json")
+            .body(self.into_body())
+            .unwrap()
+    }
+}

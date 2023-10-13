@@ -8,16 +8,17 @@ use crate::error::Error;
 
 #[cfg(feature = "macros")]
 pub mod html {
-    pub use crate::_html_new as new;
-    pub use html_to_string_macro::html as string;
+    pub use crate::_html_from as from;
+    pub use tela_html::html as new;
+    pub use tela_html::*;
 
     #[macro_export]
-    macro_rules! _html_new {
+    macro_rules! _html_from {
         ($($html: tt)*) => {
             $crate::response::HTML(
-                $crate::response::html::string! {
+                $crate::response::html::new! {
                     $($html)*
-                }
+                }.to_string()
             )
         };
     }
@@ -25,14 +26,14 @@ pub mod html {
 
 #[cfg(feature = "macros")]
 pub mod json {
-    pub use crate::_json_new as new;
-    pub use serde_json::json as object;
+    pub use crate::_json_from as from;
+    pub use serde_json::json as new;
 
     #[macro_export]
-    macro_rules! _json_new {
+    macro_rules! _json_from {
         ($($json: tt)*) => {
             $crate::response::JSON(
-                $crate::response::json::object!($($json)*)
+                $crate::response::json::new!($($json)*)
             )
         };
     }

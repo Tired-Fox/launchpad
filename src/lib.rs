@@ -12,6 +12,8 @@ use hyper::body::Bytes;
 pub use request::Request;
 pub use response::Response;
 
+pub use tela_html as html;
+
 pub use hyper;
 pub use tokio::main;
 

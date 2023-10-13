@@ -172,6 +172,43 @@ impl Props {
     }
 
     pub fn get(&self, key: &str) -> Option<String> {
-        self.props.get(key).map(|v| v.clone())
+        self.props.get(key).map(|v| unescape(v.clone()))
+    }
+}
+
+/// HTML escape the provided string
+pub fn escape(value: String) -> String {
+    #[cfg(not(feature = "auto-escape"))]
+    return value;
+    #[cfg(feature = "auto-escape")]
+    {
+        let mut result = String::new();
+        for char in value.chars() {
+            match char {
+                '&' => result.push_str("&amp;"),
+                '<' => result.push_str("&lt;"),
+                '>' => result.push_str("&gt;"),
+                '"' => result.push_str("&quot;"),
+                '\'' => result.push_str("&#x27;"),
+                _ => result.push(char),
+            }
+        }
+        result
+    }
+}
+
+/// HTML unescape the provided string
+pub fn unescape(value: String) -> String {
+    #[cfg(not(feature = "auto-escape"))]
+    return value;
+    #[cfg(feature = "auto-escape")]
+    {
+        value
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&lt;", "<")
+            .replace("&#x27;", "'")
+            .replace("&amp;", "&")
     }
 }

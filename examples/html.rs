@@ -1,9 +1,20 @@
 extern crate tela;
-use tela::response::html;
+use tela::{html::props, response::html};
 
 fn main() {
     let data = 33;
-    println!("{}", html::string!{
-        <p {data}>"data"</p>
-    })
+    let attrs = props! {
+        data: data,
+        name: "tela"
+    };
+
+    println!(
+        "{}",
+        html::new! {
+            <p {data} {..attrs}>
+            {"<script>const _ = 'auto escaped'</script>"}
+            </p>
+        }
+        .to_string()
+    )
 }

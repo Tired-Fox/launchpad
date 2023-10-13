@@ -11,5 +11,5 @@
 - HTML macro
   - [x] Basic macro with components and loops
   - [x] Props
-  - [ ] Capture sanatization
-  - [ ] IntoResponse for new Element
+  - [x] Capture sanatization
+  - [x] IntoResponse for new Element

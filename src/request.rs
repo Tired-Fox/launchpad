@@ -12,7 +12,6 @@ use serde::Deserialize;
 
 use crate::body::{IntoBody, ParseBody};
 use crate::error::Error;
-use crate::Full;
 
 pub struct Builder {
     uri: String,

@@ -39,18 +39,8 @@ pub struct Token {
 pub enum Attribute {
     #[default]
     Exists,
-    Literal(String),
-    Capture(TokenStream2),
-}
-
-impl ToTokens for Attribute {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        match self {
-            Attribute::Exists => tokens.append_all(quote!("yes")),
-            Attribute::Literal(content) => tokens.append_all(quote!(#content)),
-            Attribute::Capture(content) => tokens.append_all(content.clone()),
-        }
-    }
+    Literal(usize),
+    Capture(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -103,9 +93,9 @@ pub struct Parser {
     pub root: Vec<usize>,
     pub stack: Vec<usize>,
     pub tokens: Vec<Token>,
-    pub children: Vec<Vec<usize>>,
 
     pub elements: Vec<Element>,
+    pub children: Vec<Vec<usize>>,
     pub spreads: Vec<Spanned<TokenStream2>>,
 
     pub tags: Vec<Spanned<String>>,
@@ -127,7 +117,7 @@ impl ToTokens for Parser {
         if children.len() > 0 {
             let chldrn = self.tokenize_children(children);
             tokens.append_all(quote!({
-                use tela_html::prelude::*;
+                use tela::html::prelude::*;
 
                 Element::wrapper(#chldrn)
             }))
@@ -260,11 +250,13 @@ impl Parser {
                         on_peek!(lookahead {
                             LitStr => {
                                 let temp = spanned!(input, @text);
-                                attrs.insert(name.inner(), Spanned { span: temp.span(), value: Attribute::Literal(temp.inner()) });
+                                attrs.insert(name.inner(), Spanned { span: temp.span(), value: Attribute::Literal(self.content.len()) });
+                                self.content.push(temp);
                             };
                             Brace => {
                                 let temp = spanned!(input, @capture);
-                                attrs.insert(name.inner(), Spanned { span: temp.span(), value: Attribute::Capture(temp.inner()) });
+                                attrs.insert(name.inner(), Spanned { span: temp.span(), value: Attribute::Capture(self.captures.len()) });
+                                self.captures.push(temp);
                             };
                             else => {
                                 let err = lookahead.error();
@@ -276,11 +268,10 @@ impl Parser {
                     }
                 };
                 Brace => {
-                    captures.push(self.captures.len());
                     let braces: ParseBuffer;
                     braced!(braces in input);
 
-                    if input.peek(Token![..]) {
+                    if braces.peek(Token![..]) {
                         eat!(braces, ..);
                         spread = Some(self.spreads.len());
                         self.spreads.push(Spanned { span: braces.span(), value: braces.parse::<TokenStream2>()? });
@@ -469,15 +460,68 @@ impl Parser {
         (AET::OptionalExtend, quote!(#capture.into_children()))
     }
 
-    fn tokenize_attrs(&self, index: usize) -> TokenStream2 {
-        let entries = &self.attrs[index];
+    fn tokenize_attrs(
+        &self,
+        index: &Option<usize>,
+        captures: &Vec<usize>,
+        spread: &Option<usize>,
+    ) -> Option<TokenStream2> {
+        let mut extends = Vec::new();
+        if let Some(index) = index {
+            let entries = &self.attrs[*index];
 
-        let mut attrs = TokenStream2::new();
-        for (name, value) in entries {
-            attrs.append_all(quote!((#name.to_string(), #value.to_prop()),))
+            let mut attrs = TokenStream2::new();
+            for (name, value) in entries {
+                let value = match value.value() {
+                    Attribute::Exists => quote!("yes".to_string()),
+                    Attribute::Literal(index) => {
+                        let lit = &self.content[*index];
+                        quote!(#lit.to_string())
+                    }
+                    Attribute::Capture(index) => {
+                        let capture = self.captures[*index].inner();
+                        quote!(#capture.to_prop())
+                    }
+                };
+                attrs.append_all(quote!((#name.to_string(), #value),))
+            }
+
+            extends.push(quote!([#attrs]));
         }
 
-        quote!(std::collections::HashMap::from([#attrs]))
+        let mut caps = TokenStream2::new();
+        for capture in captures {
+            let capture = &self.captures[*capture];
+            caps.append_all(quote!((#capture.to_string(), "yes".to_string()),))
+        }
+
+        if !caps.is_empty() {
+            extends.push(quote!([#caps]));
+        }
+
+        if let Some(index) = spread {
+            let spread = &self.spreads[*index];
+            extends.push(quote!(#spread));
+        }
+
+        if extends.is_empty() {
+            return None;
+        }
+
+        let first = extends.first().unwrap();
+        if extends.len() == 1 {
+            Some(quote!(std::collections::HashMap::from(#first)))
+        } else {
+            let result = extends[1..]
+                .iter()
+                .map(|e| quote!(_a.extend(#e);))
+                .collect::<TokenStream2>();
+            Some(quote!({
+                let mut _a = std::collections::HashMap::from(#first);
+                #result
+                _a
+            }))
+        }
     }
 
     fn tokenize_for_element(
@@ -585,10 +629,10 @@ impl Parser {
         if tag.value().as_str() == "for" {
             self.tokenize_for_element(tag, element)
         } else if TAGS.contains(tag.value().as_str()) {
-            let attrs = match element.attrs {
-                Some(index) => self.tokenize_attrs(index),
-                None => quote!(None),
-            };
+            // Match on return if None do something else take the Some(TokenStream)
+            let attrs = self
+                .tokenize_attrs(&element.attrs, &element.captures, &element.spread)
+                .unwrap_or(quote!(None));
 
             let chldrn = match element.children {
                 Some(children) => self.tokenize_children(
@@ -607,10 +651,9 @@ impl Parser {
                 quote!(Element::tag(#decl, #tag, #attrs, #chldrn)),
             )
         } else {
-            let attrs = match element.attrs {
-                Some(index) => self.tokenize_attrs(index),
-                None => quote!(std::collections::HashMap::new()),
-            };
+            let attrs = self
+                .tokenize_attrs(&element.attrs, &element.captures, &element.spread)
+                .unwrap_or(quote!(std::collections::HashMap::new()));
 
             let chldrn = match element.children {
                 Some(children) => self.tokenize_children(

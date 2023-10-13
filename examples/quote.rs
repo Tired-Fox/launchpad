@@ -4,9 +4,10 @@ use tela::client::SendRequest;
 use tela::error::Error;
 use tela::server::router::get;
 use tela::{
+    html::Element,
     prelude::*,
     response::{html, HTML},
-    server::{serve, Router, Socket},
+    server::{Router, Server, Socket},
     Request,
 };
 
@@ -26,7 +27,7 @@ struct Quote {
 
 /// Credit to: https://github.com/lukePeavey/quotable
 /// This is the api used for getting quotes
-async fn random_quote(_: Request) -> Result<HTML<String>, Error> {
+async fn random_quote(_: Request) -> Result<Element, Error> {
     let response = Request::builder()
         .uri("https://api.quotable.io/random")
         .send()
@@ -42,7 +43,7 @@ async fn random_quote(_: Request) -> Result<HTML<String>, Error> {
     })
 }
 
-async fn home(_: Request) -> HTML<String> {
+async fn home(_: Request) -> Element {
     html::new! {
         <html>
             <head>
@@ -105,9 +106,11 @@ async fn home(_: Request) -> HTML<String> {
 /// Run this example with the macros and log features
 #[tela::main]
 async fn main() {
-    serve(
-        Socket::Local(3000),
-        Router::new().route("/", get(home).post(random_quote)),
-    )
-    .await;
+    Server::builder()
+        .on_bind(|addr| println!("Serving to {}", addr))
+        .serve(
+            Socket::Local(3000),
+            Router::new().route("/", get(home).post(random_quote)),
+        )
+        .await;
 }

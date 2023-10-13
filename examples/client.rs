@@ -6,10 +6,10 @@ use std::sync::Arc;
 use tela::{
     client::{fetch, SendRequest},
     prelude::*,
-    response::{html, HTML},
+    response::{html, json, HTML},
     server::{
         router::{get, post},
-        serve, Router, Socket,
+        Router, Server, Socket,
     },
     Request,
 };
@@ -27,7 +27,7 @@ struct Body {
     length: u32,
 }
 
-async fn posted(req: Request) -> HTML<String> {
+async fn posted(req: Request) -> impl IntoResponse {
     // Any method parsing into an object returns a result
     let query: Query = req.query().unwrap();
     let body: Body = req.json().await.unwrap();
@@ -47,50 +47,52 @@ async fn posted(req: Request) -> HTML<String> {
 async fn main() {
     const url: &'static str = "http://127.0.0.1:3000/posted?firstname=Tela&lastname=Web";
 
-    serve(
-        Socket::Local(3000),
-        Router::new()
-            .route("/posted", post(posted))
-            .route(
-                "/macro",
-                get(|_| async {
-                    let response: Response<Incoming> = fetch!(
-                        url,
-                        method: post,
-                        body: json!({
-                            "type": "macro",
-                            "message": "Hello, world!",
-                            "length": 13
-                        })
-                    )
-                    .await;
-
-                    match response.text().await {
-                        Ok(text) => HTML(text),
-                        Err(e) => html::new!(<strong>"Error: "{e}</strong>),
-                    }
-                }),
-            )
-            .route(
-                "/raw",
-                get(|_| async {
-                    let response = Request::builder()
-                        .uri(url)
-                        .method("POST")
-                        .body(json!({
-                            "type": "raw",
-                            "message": "Hello, world!",
-                            "length": 13
-                        }))
-                        .send()
+    Server::builder()
+        .on_bind(|addr| println!("Serving to {}", addr))
+        .serve(
+            Socket::Local(3000),
+            Router::new()
+                .route("/posted", post(posted))
+                .route(
+                    "/macro",
+                    get(|_| async {
+                        let response: Response<Incoming> = fetch!(
+                            url,
+                            method: post,
+                            body: json::new!({
+                                "type": "macro",
+                                "message": "Hello, world!",
+                                "length": 13
+                            })
+                        )
                         .await;
 
-                    match response.text().await {
-                        Ok(text) => HTML(text),
-                        Err(e) => html::new!(<strong>"Error: "{e}</strong>),
-                    }
-                }),
-            ),
-    )
-    .await
+                        match response.text().await {
+                            Ok(text) => HTML(text),
+                            Err(e) => html::from!(<strong>"Error: "{e}</strong>),
+                        }
+                    }),
+                )
+                .route(
+                    "/raw",
+                    get(|_| async {
+                        let response = Request::builder()
+                            .uri(url)
+                            .method("POST")
+                            .body(json::new!({
+                                "type": "raw",
+                                "message": "Hello, world!",
+                                "length": 13
+                            }))
+                            .send()
+                            .await;
+
+                        match response.text().await {
+                            Ok(text) => HTML(text),
+                            Err(e) => html::from!(<strong>"Error: "{e}</strong>),
+                        }
+                    }),
+                ),
+        )
+        .await
 }

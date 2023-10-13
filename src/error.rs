@@ -132,7 +132,7 @@ impl From<&str> for Error {
 
 impl IntoResponse for Error {
     fn into_response(self) -> hyper::Response<Full<Bytes>> {
-        let mut body = match self.body {
+        let body = match self.body {
             Some(body) => body,
             None => Full::new(Bytes::new()),
         };
