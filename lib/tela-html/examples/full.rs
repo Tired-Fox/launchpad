@@ -2,6 +2,7 @@ extern crate tela_html;
 use std::collections::HashMap;
 
 use tela_html::{element::Element, html, props, Props};
+mod data;
 
 fn component(props: Props) -> Element {
     println!("{:?}", props);
@@ -55,6 +56,7 @@ fn main() {
                 <div>"Hello, world!"</div>
             }}
         </div>
+        <data::test />
     };
 
     // println!("{:?}", result);

@@ -32,6 +32,73 @@ where
     fn from_prop(prop: String) -> Result<Self, String>;
 }
 
+pub trait FromProps<const SIZE: usize>
+where
+    Self: Sized,
+{
+    fn from_props(extracts: [&str; SIZE], props: &HashMap<String, String>) -> Result<Self, String>;
+}
+
+macro_rules! multi_prop_extract {
+    ($([$($set: tt)*]);* $(;)?) => {
+        $(
+            multi_prop_extract!{ $($set)* }
+        )*
+    };
+    ($first: literal) => {
+        paste::paste!{
+            impl<[<T $first>]: FromProp> FromProps<$first> for ([<T $first>],) {
+                fn from_props(extracts: [&str; $first], props: &HashMap<String, String>) -> Result<Self, String> {
+                    Ok((
+                        [<T $first>]::from_prop(match props.get(&(extracts[$first - 1].to_string())) {
+                            Some(value) => value,
+                            None => return Err(format!("Key '{}' is not a prop", extracts[$first-1]))
+                        }.clone())?,
+                    ))
+                }
+            }
+        }
+    };
+    ($($type: literal),* | $last: literal) => {
+        paste::paste!{
+            impl<$([<T $type>]: FromProp,)* [<T $last>]: FromProp> FromProps<$last> for ($([<T $type>],)* [<T $last>], ) {
+                fn from_props(extracts: [&str; $last], props: &HashMap<String, String>) -> Result<Self, String> {
+                    Ok((
+                        $(
+                            [<T $type>]::from_prop(match props.get(&(extracts[$type - 1].to_string())) {
+                                Some(value) => value,
+                                None => return Err(format!("Key '{}' is not a prop", extracts[$type-1]))
+                            }.clone())?,
+                        )*
+                        [<T $last>]::from_prop(match props.get(&(extracts[$last - 1].to_string())) {
+                            Some(value) => value,
+                            None => return Err(format!("Key {} is not a prop", extracts[$last-1]))
+                        }.clone())?,
+                    ))
+                }
+            }
+        }
+    };
+}
+
+multi_prop_extract! {
+    [1];
+    [1 | 2];
+    [1, 2 | 3];
+    [1, 2, 3 | 4];
+    [1, 2, 3, 4 | 5];
+    [1, 2, 3, 4, 5 | 6];
+    [1, 2, 3, 4, 5, 6 | 7];
+    [1, 2, 3, 4, 5, 6, 7 | 8];
+    [1, 2, 3, 4, 5, 6, 7, 8 | 9];
+    [1, 2, 3, 4, 5, 6, 7, 8, 9 | 10];
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10 | 11];
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 | 12];
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 | 13];
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 | 14];
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 | 15];
+}
+
 impl<T: Prop> FromProp for T {
     fn from_prop(prop: String) -> Result<Self, String> {
         serde_json::from_str(Box::leak(prop.into_boxed_str())).map_err(|e| e.to_string())
@@ -86,6 +153,8 @@ impl<A: Serialize + Deserialize<'static> + Hash + Eq, B: Serialize + Deserialize
     for HashMap<A, B>
 {
 }
+
+impl<T: Serialize + Deserialize<'static>> Prop for Vec<T> {}
 
 #[macro_export]
 macro_rules! props {
@@ -171,8 +240,18 @@ impl Props {
         }
     }
 
+    pub fn fetch_all<const SIZE: usize, T: FromProps<SIZE>>(
+        &self,
+        keys: [&str; SIZE],
+    ) -> Result<T, String> {
+        T::from_props(keys, &self.props)
+    }
+
     pub fn get(&self, key: &str) -> Option<String> {
-        self.props.get(key).map(|v| unescape(v.clone()))
+        #[cfg(feature="auto-escape")]
+        return self.props.get(key).map(|v| unescape(v.clone()));
+        #[cfg(not(feature="auto-escape"))]
+        return self.props.get(key).map(|v| v.clone());
     }
 }
 

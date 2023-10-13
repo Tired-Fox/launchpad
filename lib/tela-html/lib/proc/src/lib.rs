@@ -25,7 +25,7 @@ pub fn prop(input: TokenStream) -> TokenStream {
     let where_clause = ast.generics.where_clause;
 
     quote! {
-        impl<#params> tela_html::Prop for #name<#params> #where_clause {}
+        impl<#params> tela::html::Prop for #name<#params> #where_clause {}
     }
     .into()
 }

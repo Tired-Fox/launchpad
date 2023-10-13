@@ -213,6 +213,9 @@ impl Parser {
             if input.peek(Token![-]) {
                 eat!(input, -);
                 name.push('-');
+            } else if input.peek(Token![::]) {
+                eat!(input, ::);
+                name.push_str("::");
             } else if input.peek(Token![:]) {
                 eat!(input, :);
                 name.push(':');
@@ -457,7 +460,7 @@ impl Parser {
 
     fn tokenize_capture(&self, payload: &usize) -> (AET, TokenStream2) {
         let capture = self.captures[*payload].value();
-        (AET::OptionalExtend, quote!(#capture.into_children()))
+        (AET::OptionalExtend, quote!((#capture).into_children()))
     }
 
     fn tokenize_attrs(
@@ -480,7 +483,7 @@ impl Parser {
                     }
                     Attribute::Capture(index) => {
                         let capture = self.captures[*index].inner();
-                        quote!(#capture.to_prop())
+                        quote!((#capture).to_prop())
                     }
                 };
                 attrs.append_all(quote!((#name.to_string(), #value),))
@@ -530,6 +533,7 @@ impl Parser {
         element: &Element,
     ) -> (AET, TokenStream2) {
         let mut lbinding: Option<String> = None;
+        let mut enumerate = quote!();
         if let Some(index) = element.attrs {
             for (attr, value) in self.attrs[index].iter() {
                 if attr.as_str().starts_with("let:") {
@@ -545,6 +549,12 @@ impl Parser {
                         );
                     }
                     lbinding = Some((&attr[4..]).to_string());
+                } else if attr.as_str() == "enum" {
+                    if let Attribute::Exists = value.value() {
+                        enumerate = quote!(.enumerate())
+                    } else {
+                        abort!(value.span(), "enumerate is a flag not an assignable value")
+                    }
                 }
             }
         }
@@ -601,7 +611,7 @@ impl Parser {
                     quote!(
                         {
                             let mut _t: Vec<Element> = Vec::new();
-                            let _items = #binding.iter().map(#handler).collect::<Vec<Element>>();
+                            let _items = #binding.iter()#enumerate.map(#handler).collect::<Vec<Element>>();
                             for _item in _items {
                                 #before
                                 _t.push(_item);
@@ -666,7 +676,7 @@ impl Parser {
                     quote!(Vec::new())
                 }
             };
-            let tag = Ident::new(tag.value().as_str(), tag.span());
+            let tag = tag.value().replace("-", "_").parse::<TokenStream2>().unwrap();
             (AET::Push, quote!(#tag.create_component(#attrs, #chldrn)))
         }
     }
