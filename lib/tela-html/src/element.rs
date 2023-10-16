@@ -154,195 +154,195 @@ impl Element {
             children: children.into_children(),
         }
     }
+}
 
-    fn debug(&self, offset: usize) -> Option<String> {
-        let indent = (0..offset).map(|_| ' ').collect::<String>();
-        match self {
-            Self::None => None,
-            Self::Wrapper(children) => Some(
-                String::from("\n")
-                    + children
-                        .iter()
-                        .filter_map(|v| v.debug(offset))
-                        .collect::<Vec<String>>()
-                        .join("\n")
-                        .as_str(),
+fn debug(element: &Element, offset: usize) -> Option<String> {
+    let indent = (0..offset).map(|_| ' ').collect::<String>();
+    match element {
+        Element::None => None,
+        Element::Wrapper(children) => Some(
+            String::from("\n")
+                + children
+                    .iter()
+                    .filter_map(|v| debug(v, offset))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+                    .as_str(),
+        ),
+        Element::Text(val) => Some(format!("{indent}Text({})", val.len(), indent = indent)),
+        #[allow(unused_variables)]
+        Element::Comment(val) => {
+            #[cfg(feature = "comments")]
+            return Some(format!("{indent}Comment({})", val.len(), indent = indent));
+            #[cfg(not(feature = "comments"))]
+            return None;
+        }
+        Element::Tag {
+            decl,
+            tag,
+            attrs,
+            children,
+        } => Some(format!(
+            "{indent}Element::{}{}{}{}",
+            if *decl { "!" } else { "" },
+            tag,
+            or_new!(
+                (attrs.len() > 0),
+                if attrs.len() <= 2 {
+                    format!(
+                        "\n{indent} {{ {} }}",
+                        attrs
+                            .iter()
+                            .map(|(name, value)| format!("{}: {:?}", name, value))
+                            .collect::<Vec<String>>()
+                            .join(", "),
+                        indent = indent
+                    )
+                } else {
+                    format!(
+                        "\n{indent} {{\n{}\n{indent} }}",
+                        attrs
+                            .iter()
+                            .map(|(name, value)| format!("{}   {}: {:?},", indent, name, value))
+                            .collect::<Vec<String>>()
+                            .join("\n"),
+                        indent = indent
+                    )
+                }
             ),
-            Self::Text(val) => Some(format!("{indent}Text({})", val.len(), indent = indent)),
-            #[allow(unused_variables)]
-            Self::Comment(val) => {
-                #[cfg(feature = "comments")]
-                return Some(format!("{indent}Comment({})", val.len(), indent = indent));
-                #[cfg(not(feature = "comments"))]
-                return None;
-            }
-            Self::Tag {
-                decl,
-                tag,
-                attrs,
-                children,
-            } => Some(format!(
-                "{indent}Element::{}{}{}{}",
+            or_new!((let Some(children)=children) => (children.len() > 0),
+                String::from("\n") + children.iter()
+                    .filter_map(|v| debug(v, offset + 2))
+                    .collect::<Vec<String>>()
+                    .join("\n").as_str()
+            ),
+            indent = indent
+        )),
+    }
+}
+
+fn etype(element: &Element) -> Type {
+    match element {
+        Element::Text(_) => Type::Text,
+        _ => Type::Other,
+    }
+}
+
+fn display(element: &Element, offset: usize) -> Option<String> {
+    let indent = (0..offset).map(|_| ' ').collect::<String>();
+    match element {
+        Element::None => None,
+        Element::Wrapper(children) => Some(format!(
+            "{indent}{}",
+            {
+                let mut result = Vec::new();
+                let mut previous = Type::Other;
+                for child in children.iter() {
+                    let (lead, value) = if let Type::Other = etype(child) {
+                        ("\n", display(child, offset))
+                    } else if let Type::Other = previous {
+                        ("\n", display(child, offset))
+                    } else {
+                        ("", display(child, 0))
+                    };
+
+                    if let Some(value) = value {
+                        previous = etype(child);
+                        result.push(format!("{}{}", lead, value));
+                    }
+                }
+                result.join("").trim_start().to_string()
+            },
+            indent = indent,
+        )),
+        Element::Text(val) => Some(format!("{}{}", indent, val)),
+        #[allow(unused_variables)]
+        Element::Comment(val) => {
+            #[cfg(feature = "comments")]
+            return Some(format!("{}<!-- {} -->", indent, val));
+            #[cfg(not(feature = "comments"))]
+            return None;
+        }
+        Element::Tag {
+            decl,
+            tag,
+            attrs,
+            children,
+        } => {
+            let all_str = if let Some(children) = children {
+                children.iter().all(|c| {
+                    if let Type::Text = etype(c) {
+                        true
+                    } else {
+                        false
+                    }
+                })
+            } else {
+                true
+            };
+            Some(format!(
+                "{indent}<{}{}{}{}>{}{}",
                 if *decl { "!" } else { "" },
                 tag,
                 or_new!(
                     (attrs.len() > 0),
-                    if attrs.len() <= 2 {
-                        format!(
-                            "\n{indent} {{ {} }}",
-                            attrs
-                                .iter()
-                                .map(|(name, value)| format!("{}: {:?}", name, value))
-                                .collect::<Vec<String>>()
-                                .join(", "),
-                            indent = indent
-                        )
+                    format!(
+                        " {}",
+                        attrs
+                            .iter()
+                            .filter_map(|(name, value)| value
+                                .to_attr_value()
+                                .map(|val| format!("{}{}", name, val)))
+                            .collect::<Vec<String>>()
+                            .join(" "),
+                    )
+                ),
+                if let None = children {
+                    if !*decl {
+                        " /"
                     } else {
-                        format!(
-                            "\n{indent} {{\n{}\n{indent} }}",
-                            attrs
-                                .iter()
-                                .map(|(name, value)| format!("{}   {}: {:?},", indent, name, value))
-                                .collect::<Vec<String>>()
-                                .join("\n"),
-                            indent = indent
-                        )
+                        ""
                     }
-                ),
+                } else {
+                    ""
+                },
                 or_new!((let Some(children)=children) => (children.len() > 0),
-                    String::from("\n") + children.iter()
-                        .filter_map(|v| v.debug(offset + 2))
-                        .collect::<Vec<String>>()
-                        .join("\n").as_str()
-                ),
-                indent = indent
-            )),
-        }
-    }
-
-    fn etype(&self) -> Type {
-        match self {
-            Self::Text(_) => Type::Text,
-            _ => Type::Other,
-        }
-    }
-
-    fn display(&self, offset: usize) -> Option<String> {
-        let indent = (0..offset).map(|_| ' ').collect::<String>();
-        match self {
-            Self::None => None,
-            Self::Wrapper(children) => Some(format!(
-                "{indent}{}",
-                {
                     let mut result = Vec::new();
                     let mut previous = Type::Other;
-                    for child in children.iter() {
-                        let (lead, value) = if let Type::Other = child.etype() {
-                            ("\n", child.display(offset))
+
+                    for (i, child) in children.iter().enumerate() {
+                        let (lead, value) = if let Type::Other = etype(child) {
+                            ("\n", display(child, offset+2))
                         } else if let Type::Other = previous {
-                            ("\n", child.display(offset))
+                            ("\n", display(child, offset+2))
                         } else {
-                            ("", child.display(0))
+                            ("", display(child, 0))
                         };
 
                         if let Some(value) = value {
-                            previous = child.etype();
-                            result.push(format!("{}{}", lead, value));
+                            previous = etype(child);
+                            result.push(format!("{}{}", if i > 0 {lead} else {""}, value));
                         }
                     }
-                    result.join("").trim_start().to_string()
-                },
-                indent = indent,
-            )),
-            Self::Text(val) => Some(format!("{}{}", indent, val)),
-            #[allow(unused_variables)]
-            Self::Comment(val) => {
-                #[cfg(feature = "comments")]
-                return Some(format!("{}<!-- {} -->", indent, val));
-                #[cfg(not(feature = "comments"))]
-                return None;
-            }
-            Self::Tag {
-                decl,
-                tag,
-                attrs,
-                children,
-            } => {
-                let all_str = if let Some(children) = children {
-                    children.iter().all(|c| {
-                        if let Type::Text = c.etype() {
-                            true
-                        } else {
-                            false
-                        }
-                    })
-                } else {
-                    true
-                };
-                Some(format!(
-                    "{indent}<{}{}{}{}>{}{}",
-                    if *decl { "!" } else { "" },
-                    tag,
-                    or_new!(
-                        (attrs.len() > 0),
-                        format!(
-                            " {}",
-                            attrs
-                                .iter()
-                                .filter_map(|(name, value)| value
-                                    .to_attr_value()
-                                    .map(|val| format!("{}{}", name, val)))
-                                .collect::<Vec<String>>()
-                                .join(" "),
-                        )
-                    ),
-                    if let None = children {
-                        if !*decl {
-                            " /"
-                        } else {
-                            ""
-                        }
+
+                    if all_str {
+                        result.join("").trim().to_string()
                     } else {
-                        ""
-                    },
-                    or_new!((let Some(children)=children) => (children.len() > 0),
-                        let mut result = Vec::new();
-                        let mut previous = Type::Other;
-
-                        for (i, child) in children.iter().enumerate() {
-                            let (lead, value) = if let Type::Other = child.etype() {
-                                ("\n", child.display(offset+2))
-                            } else if let Type::Other = previous {
-                                ("\n", child.display(offset+2))
-                            } else {
-                                ("", child.display(0))
-                            };
-
-                            if let Some(value) = value {
-                                previous = child.etype();
-                                result.push(format!("{}{}", if i > 0 {lead} else {""}, value));
-                            }
-                        }
-
-                        if all_str {
-                            result.join("").trim().to_string()
-                        } else {
-                            format!("\n{}\n", result.join(""))
-                        }
-                    ),
-                    or_new!((let Some(children) = children),
-                        format!("{}</{}>", or_new!((children.len() > 0) => (!all_str), indent.clone()), tag)
-                    ),
-                    indent = indent
-                ))
-            }
+                        format!("\n{}\n", result.join(""))
+                    }
+                ),
+                or_new!((let Some(children) = children),
+                    format!("{}</{}>", or_new!((children.len() > 0) => (!all_str), indent.clone()), tag)
+                ),
+                indent = indent
+            ))
         }
     }
 }
 
 impl Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(result) = self.debug(0) {
+        if let Some(result) = debug(self, 0) {
             write!(f, "{}", result)?
         }
         Ok(())
@@ -351,6 +351,6 @@ impl Debug for Element {
 
 impl ToString for Element {
     fn to_string(&self) -> String {
-        self.display(0).unwrap_or(String::new())
+        display(self, 0).unwrap_or(String::new())
     }
 }

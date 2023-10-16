@@ -1,5 +1,14 @@
 extern crate tela;
-use tela::{html::props, response::html};
+use tela::{
+    html::{props, Element, Props},
+    response::html,
+};
+
+async fn component(props: Props) -> Element {
+    html::new! {
+        <div>"From async"</div>
+    }
+}
 
 fn main() {
     let data = 33;
@@ -7,6 +16,7 @@ fn main() {
         data: data,
         name: "tela"
     };
+    let d = [1, 2, 3, 4, 5];
 
     println!(
         "{}",
@@ -14,6 +24,13 @@ fn main() {
             <p {data} {..attrs}>
             {"<script>const _ = 'auto escaped'</script>"}
             </p>
+            <for let:d await>
+                {|text: u8| async move {
+                    html::new! {
+                        <component text={text} await/>
+                    }
+                }}
+            </for>
         }
         .to_string()
     )

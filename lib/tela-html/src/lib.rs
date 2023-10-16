@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, hash::Hash};
+use std::{collections::HashMap, fmt::Display, future::Future, hash::Hash, pin::Pin};
 
 pub mod element;
 pub mod prelude;
@@ -167,15 +167,36 @@ pub trait ToAttrValue {
     fn to_attr_value(&self) -> Option<String>;
 }
 
-pub trait Component {
-    fn create_component(
-        &self,
-        attributes: HashMap<String, String>,
-        children: Vec<Element>,
-    ) -> Element;
+pub trait Closure<'a, In = (), Out = ()> {
+    fn process(&'a self, args: In) -> Out;
 }
 
-impl<F> Component for F
+impl<'a, F, Fut, In> Closure<'a, In, Pin<Box<dyn Future<Output = Element> + Send + 'static>>> for F
+where
+    F: Fn(In) -> Fut + 'a,
+    Fut: Future<Output = Element> + Send + 'static,
+{
+    fn process(&self, args: In) -> Pin<Box<dyn Future<Output = Element> + Send + 'static>> {
+        Box::pin(self(args))
+    }
+}
+
+impl<'a, F, In> Closure<'a, In, Element> for F
+where
+    F: Fn(In) -> Element,
+{
+    fn process(&self, args: In) -> Element {
+        let callback = self.clone();
+        callback(args)
+    }
+}
+
+pub trait Component<'a, T = ()> {
+    fn create_component(&'a self, attributes: HashMap<String, String>, children: Vec<Element>)
+        -> T;
+}
+
+impl<'a, F> Component<'a, Element> for F
 where
     F: Fn(Props) -> Element,
 {
@@ -184,8 +205,21 @@ where
         attributes: HashMap<String, String>,
         children: Vec<Element>,
     ) -> Element {
-        // let callback: fn(dyn Any) -> Element = |v| Element::None;
         self(Props::new(attributes, children))
+    }
+}
+
+impl<F, Fut> Component<'static, Pin<Box<dyn Future<Output = Element> + Send + 'static>>> for F
+where
+    F: Fn(Props) -> Fut + Sync + 'static,
+    Fut: Future<Output = Element> + Send + 'static,
+{
+    fn create_component(
+        &'static self,
+        attributes: HashMap<String, String>,
+        children: Vec<Element>,
+    ) -> Pin<Box<dyn Future<Output = Element> + Send + 'static>> {
+        Box::pin(self(Props::new(attributes, children)))
     }
 }
 
@@ -248,9 +282,9 @@ impl Props {
     }
 
     pub fn get(&self, key: &str) -> Option<String> {
-        #[cfg(feature="auto-escape")]
+        #[cfg(feature = "auto-escape")]
         return self.props.get(key).map(|v| unescape(v.clone()));
-        #[cfg(not(feature="auto-escape"))]
+        #[cfg(not(feature = "auto-escape"))]
         return self.props.get(key).map(|v| v.clone());
     }
 }

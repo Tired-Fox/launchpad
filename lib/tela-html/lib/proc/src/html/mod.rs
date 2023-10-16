@@ -468,25 +468,31 @@ impl Parser {
         index: &Option<usize>,
         captures: &Vec<usize>,
         spread: &Option<usize>,
-    ) -> Option<TokenStream2> {
+    ) -> Option<(TokenStream2, TokenStream2)> {
         let mut extends = Vec::new();
+        let mut will_await = TokenStream2::new();
+
         if let Some(index) = index {
             let entries = &self.attrs[*index];
-
             let mut attrs = TokenStream2::new();
+
             for (name, value) in entries {
-                let value = match value.value() {
-                    Attribute::Exists => quote!("yes".to_string()),
-                    Attribute::Literal(index) => {
-                        let lit = &self.content[*index];
-                        quote!(#lit.to_string())
-                    }
-                    Attribute::Capture(index) => {
-                        let capture = self.captures[*index].inner();
-                        quote!((#capture).to_prop())
-                    }
-                };
-                attrs.append_all(quote!((#name.to_string(), #value),))
+                if name.as_str() == "await" {
+                    will_await = quote!(.await);
+                } else {
+                    let value = match value.value() {
+                        Attribute::Exists => quote!("yes".to_string()),
+                        Attribute::Literal(index) => {
+                            let lit = &self.content[*index];
+                            quote!(#lit.to_string())
+                        }
+                        Attribute::Capture(index) => {
+                            let capture = self.captures[*index].inner();
+                            quote!((#capture).to_prop())
+                        }
+                    };
+                    attrs.append_all(quote!((#name.to_string(), #value),))
+                }
             }
 
             extends.push(quote!([#attrs]));
@@ -513,17 +519,20 @@ impl Parser {
 
         let first = extends.first().unwrap();
         if extends.len() == 1 {
-            Some(quote!(std::collections::HashMap::from(#first)))
+            Some((quote!(std::collections::HashMap::from(#first)), will_await))
         } else {
             let result = extends[1..]
                 .iter()
                 .map(|e| quote!(_a.extend(#e);))
                 .collect::<TokenStream2>();
-            Some(quote!({
-                let mut _a = std::collections::HashMap::from(#first);
-                #result
-                _a
-            }))
+            Some((
+                quote!({
+                    let mut _a = std::collections::HashMap::from(#first);
+                    #result
+                    _a
+                }),
+                will_await,
+            ))
         }
     }
 
@@ -533,7 +542,9 @@ impl Parser {
         element: &Element,
     ) -> (AET, TokenStream2) {
         let mut lbinding: Option<String> = None;
-        let mut enumerate = quote!();
+        let mut enumerate = TokenStream2::new();
+        let mut will_await = TokenStream2::new();
+
         if let Some(index) = element.attrs {
             for (attr, value) in self.attrs[index].iter() {
                 if attr.as_str().starts_with("let:") {
@@ -549,6 +560,8 @@ impl Parser {
                         );
                     }
                     lbinding = Some((&attr[4..]).to_string());
+                } else if attr.as_str() == "await" {
+                    will_await = quote!(.await);
                 } else if attr.as_str() == "enum" {
                     if let Attribute::Exists = value.value() {
                         enumerate = quote!(.enumerate())
@@ -611,10 +624,10 @@ impl Parser {
                     quote!(
                         {
                             let mut _t: Vec<Element> = Vec::new();
-                            let _items = #binding.iter()#enumerate.map(#handler).collect::<Vec<Element>>();
-                            for _item in _items {
+                            let _cbk = #handler;
+                            for _item in #binding.iter()#enumerate {
                                 #before
-                                _t.push(_item);
+                                _t.push(_cbk.process(_item.clone())#will_await);
                                 #after
                             }
                             _t
@@ -640,9 +653,9 @@ impl Parser {
             self.tokenize_for_element(tag, element)
         } else if TAGS.contains(tag.value().as_str()) {
             // Match on return if None do something else take the Some(TokenStream)
-            let attrs = self
+            let (attrs, _) = self
                 .tokenize_attrs(&element.attrs, &element.captures, &element.spread)
-                .unwrap_or(quote!(None));
+                .unwrap_or((quote!(None), TokenStream2::new()));
 
             let chldrn = match element.children {
                 Some(children) => self.tokenize_children(
@@ -661,9 +674,12 @@ impl Parser {
                 quote!(Element::tag(#decl, #tag, #attrs, #chldrn)),
             )
         } else {
-            let attrs = self
+            let (attrs, will_await) = self
                 .tokenize_attrs(&element.attrs, &element.captures, &element.spread)
-                .unwrap_or(quote!(std::collections::HashMap::new()));
+                .unwrap_or((
+                    quote!(std::collections::HashMap::new()),
+                    TokenStream2::new(),
+                ));
 
             let chldrn = match element.children {
                 Some(children) => self.tokenize_children(
@@ -676,8 +692,15 @@ impl Parser {
                     quote!(Vec::new())
                 }
             };
-            let tag = tag.value().replace("-", "_").parse::<TokenStream2>().unwrap();
-            (AET::Push, quote!(#tag.create_component(#attrs, #chldrn)))
+            let tag = tag
+                .value()
+                .replace("-", "_")
+                .parse::<TokenStream2>()
+                .unwrap();
+            (
+                AET::Push,
+                quote!(#tag.create_component(#attrs, #chldrn)#will_await),
+            )
         }
     }
 

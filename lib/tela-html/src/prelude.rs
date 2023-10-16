@@ -1,4 +1,4 @@
 pub use super::{
     element::{IntoAttrs, IntoChildren},
-    escape, Component, Element, FromProp, Prop, Props, ToAttrValue, ToProp,
+    escape, Closure, Component, Element, FromProp, Prop, Props, ToAttrValue, ToProp,
 };
