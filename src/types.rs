@@ -1,6 +1,7 @@
 pub use form::Form;
 pub use html::Html;
 pub use json::Json;
+pub use query::Query;
 
 pub mod form {
     use std::{
