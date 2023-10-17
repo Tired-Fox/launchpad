@@ -4,7 +4,6 @@ use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 
 use crate::{
-    error::Error,
     prelude::IntoResponse,
     request::{FromRequest, FromRequestBody},
 };
@@ -55,11 +54,14 @@ macro_rules! handlers {
                     let refer = self.clone();
                     Box::pin(async move {
                         $(
-                            let [<$type:lower>] = $type::from_request(&request);
+                            let [<$type:lower>] = match $type::from_request(&request) {
+                                Ok(value) => value,
+                                Err(err) => return err.into_response()
+                            };
                         )*
                         let [<$last:lower>] = match $last::from_request_body(request).await {
                             Ok(value) => value,
-                            Err(err) => return Error::from(err).into_response()
+                            Err(err) => return err.into_response()
                         };
                         refer(
                             $([<$type:lower>],)*

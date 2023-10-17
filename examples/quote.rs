@@ -3,6 +3,7 @@ extern crate tela;
 use tela::{
     html::{self, Element},
     prelude::*,
+    query::Query,
     request::{Body, Head, Headers, Method},
     server::{
         router::{get, post},

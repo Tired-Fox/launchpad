@@ -117,6 +117,21 @@ impl From<Request> for HttpRequest<Incoming> {
     }
 }
 
+impl<'r> ParseBody<'r> for hyper::Request<Incoming> {
+    fn text(
+        self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, Error>> + Send>> {
+        Box::pin(async move {
+            String::from_utf8(self.collect().await.unwrap().to_bytes().to_vec())
+                .map_err(Error::from)
+        })
+    }
+
+    fn raw(self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<u8>> + Send>> {
+        Box::pin(async move { self.collect().await.unwrap().to_bytes().to_vec() })
+    }
+}
+
 impl<'r> ParseBody<'r> for Request {
     fn text(
         self,
@@ -220,46 +235,55 @@ pub trait FromRequest
 where
     Self: Send + Sized,
 {
-    fn from_request(request: &hyper::Request<Incoming>) -> Self;
+    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error>;
+}
+
+impl<T> FromRequest for Option<T>
+where
+    T: FromRequest,
+{
+    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+        Ok(T::from_request(request).ok())
+    }
 }
 
 impl FromRequest for Version {
-    fn from_request(request: &hyper::Request<Incoming>) -> Self {
-        request.version()
+    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+        Ok(request.version())
     }
 }
 
 impl FromRequest for Head {
-    fn from_request(request: &hyper::Request<Incoming>) -> Self {
-        Head::new(request)
+    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+        Ok(Head::new(request))
     }
 }
 
 impl FromRequest for Method {
-    fn from_request(request: &hyper::Request<Incoming>) -> Self {
-        request.method().clone()
+    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+        Ok(request.method().clone())
     }
 }
 
 impl FromRequest for HashMap<String, String> {
-    fn from_request(request: &hyper::Request<Incoming>) -> Self {
-        request
+    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+        Ok(request
             .headers()
             .iter()
             .map(|(hn, hv)| (hn.to_string(), hv.to_str().unwrap().to_string()))
-            .collect()
+            .collect())
     }
 }
 
 impl FromRequest for Headers {
-    fn from_request(request: &hyper::Request<Incoming>) -> Self {
-        request.headers().clone()
+    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+        Ok(request.headers().clone())
     }
 }
 
 impl FromRequest for Uri {
-    fn from_request(request: &hyper::Request<Incoming>) -> Self {
-        request.uri().clone()
+    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+        Ok(request.uri().clone())
     }
 }
 
@@ -270,6 +294,17 @@ where
     fn from_request_body(
         request: hyper::Request<Incoming>,
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>>;
+}
+
+impl<T> FromRequestBody for Option<T>
+where
+    T: FromRequestBody,
+{
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async move { Ok(T::from_request_body(request).await.ok()) })
+    }
 }
 
 impl FromRequestBody for Body {
@@ -285,22 +320,6 @@ impl FromRequestBody for Request {
         request: hyper::Request<Incoming>,
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
         Box::pin(async { Ok(Request::from(request)) })
-    }
-}
-
-impl<T: Serialize + Deserialize<'static> + Send> FromRequestBody for Json<T> {
-    fn from_request_body(
-        request: hyper::Request<Incoming>,
-    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
-        Box::pin(async { Request::from(request).json::<T>().await.map(|v| Json(v)) })
-    }
-}
-
-impl<T: Deserialize<'static> + Send> FromRequestBody for Form<T> {
-    fn from_request_body(
-        request: hyper::Request<Incoming>,
-    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
-        Box::pin(async { Request::from(request).form::<T>().await.map(|v| Form(v)) })
     }
 }
 
