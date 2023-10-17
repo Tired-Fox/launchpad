@@ -123,11 +123,6 @@ pub enum Element {
     },
 }
 
-enum Type {
-    Text,
-    Other,
-}
-
 impl Element {
     pub fn text<S: Display>(text: S) -> Element {
         Element::Text(text.to_string())
@@ -221,45 +216,21 @@ fn debug(element: &Element, offset: usize) -> Option<String> {
     }
 }
 
-fn etype(element: &Element) -> Type {
-    match element {
-        Element::Text(_) => Type::Text,
-        _ => Type::Other,
-    }
-}
-
-fn display(element: &Element, offset: usize) -> Option<String> {
-    let indent = (0..offset).map(|_| ' ').collect::<String>();
+fn display(element: &Element) -> Option<String> {
     match element {
         Element::None => None,
-        Element::Wrapper(children) => Some(format!(
-            "{indent}{}",
-            {
-                let mut result = Vec::new();
-                let mut previous = Type::Other;
-                for child in children.iter() {
-                    let (lead, value) = if let Type::Other = etype(child) {
-                        ("\n", display(child, offset))
-                    } else if let Type::Other = previous {
-                        ("\n", display(child, offset))
-                    } else {
-                        ("", display(child, 0))
-                    };
-
-                    if let Some(value) = value {
-                        previous = etype(child);
-                        result.push(format!("{}{}", lead, value));
-                    }
-                }
-                result.join("").trim_start().to_string()
-            },
-            indent = indent,
-        )),
-        Element::Text(val) => Some(format!("{}{}", indent, val)),
+        Element::Wrapper(children) => Some(format!("{}", {
+            children
+                .iter()
+                .filter_map(|c| display(c))
+                .collect::<Vec<String>>()
+                .join("")
+        })),
+        Element::Text(val) => Some(val.clone()),
         #[allow(unused_variables)]
         Element::Comment(val) => {
             #[cfg(feature = "comments")]
-            return Some(format!("{}<!-- {} -->", indent, val));
+            return Some(format!("<!-- {} -->", val));
             #[cfg(not(feature = "comments"))]
             return None;
         }
@@ -268,75 +239,39 @@ fn display(element: &Element, offset: usize) -> Option<String> {
             tag,
             attrs,
             children,
-        } => {
-            let all_str = if let Some(children) = children {
-                children.iter().all(|c| {
-                    if let Type::Text = etype(c) {
-                        true
-                    } else {
-                        false
-                    }
-                })
-            } else {
-                true
-            };
-            Some(format!(
-                "{indent}<{}{}{}{}>{}{}",
-                if *decl { "!" } else { "" },
-                tag,
-                or_new!(
-                    (attrs.len() > 0),
-                    format!(
-                        " {}",
-                        attrs
-                            .iter()
-                            .filter_map(|(name, value)| value
-                                .to_attr_value()
-                                .map(|val| format!("{}{}", name, val)))
-                            .collect::<Vec<String>>()
-                            .join(" "),
-                    )
-                ),
-                if let None = children {
-                    if !*decl {
-                        " /"
-                    } else {
-                        ""
-                    }
+        } => Some(format!(
+            "<{}{}{}{}>{}{}",
+            if *decl { "!" } else { "" },
+            tag,
+            or_new!(
+                (attrs.len() > 0),
+                format!(
+                    " {}",
+                    attrs
+                        .iter()
+                        .filter_map(|(name, value)| value
+                            .to_attr_value()
+                            .map(|val| format!("{}{}", name, val)))
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                )
+            ),
+            if let None = children {
+                if !*decl {
+                    " /"
                 } else {
                     ""
-                },
-                or_new!((let Some(children)=children) => (children.len() > 0),
-                    let mut result = Vec::new();
-                    let mut previous = Type::Other;
-
-                    for (i, child) in children.iter().enumerate() {
-                        let (lead, value) = if let Type::Other = etype(child) {
-                            ("\n", display(child, offset+2))
-                        } else if let Type::Other = previous {
-                            ("\n", display(child, offset+2))
-                        } else {
-                            ("", display(child, 0))
-                        };
-
-                        if let Some(value) = value {
-                            previous = etype(child);
-                            result.push(format!("{}{}", if i > 0 {lead} else {""}, value));
-                        }
-                    }
-
-                    if all_str {
-                        result.join("").trim().to_string()
-                    } else {
-                        format!("\n{}\n", result.join(""))
-                    }
-                ),
-                or_new!((let Some(children) = children),
-                    format!("{}</{}>", or_new!((children.len() > 0) => (!all_str), indent.clone()), tag)
-                ),
-                indent = indent
-            ))
-        }
+                }
+            } else {
+                ""
+            },
+            or_new!((let Some(children)=children) => (children.len() > 0),
+                children.iter().filter_map(|c| display(c)).collect::<Vec<String>>().join("")
+            ),
+            or_new!((let Some(_) = children),
+                format!("</{}>", tag)
+            ),
+        )),
     }
 }
 
@@ -351,6 +286,6 @@ impl Debug for Element {
 
 impl ToString for Element {
     fn to_string(&self) -> String {
-        display(self, 0).unwrap_or(String::new())
+        display(self).unwrap_or(String::new())
     }
 }

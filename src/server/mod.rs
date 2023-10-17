@@ -43,7 +43,6 @@ impl Default for Socket {
 ///     - Example: `socket!(Network, 3000, 4000)`
 ///     - Debug: `Socket::Network(3000)`
 ///     - Release: `Socket::Network(4000)`
-#[cfg(feature = "macros")]
 #[macro_export]
 macro_rules! socket {
     ($dbg_port: literal, $rls_port: literal) => {
@@ -72,7 +71,6 @@ macro_rules! socket {
     };
 }
 
-#[cfg(feature = "macros")]
 pub use crate::socket;
 
 /// Convert a tuple of ([], u16) or ([u8; 4], u16) into a SocketAddr;

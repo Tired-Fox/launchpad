@@ -1,32 +1,83 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{future::Future, pin::Pin};
 
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 
-use crate::{prelude::IntoResponse, Request};
+use crate::{
+    error::Error,
+    prelude::IntoResponse,
+    request::{FromRequest, FromRequestBody},
+};
 
 pub type HandlerFuture = Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send>>;
-pub trait Handler: Send + Sync + 'static {
-    type Future;
-
-    fn call(&self, request: hyper::Request<Incoming>) -> Self::Future;
-    fn referenced(self) -> Arc<dyn Handler<Future = Self::Future> + Send + Sync>;
+pub trait Handler<IN = ()>: Send + Sync + 'static {
+    fn handle_request(
+        &self,
+        request: hyper::Request<Incoming>,
+    ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>>;
 }
 
-impl<F, Fut, Res> Handler for F
+impl<F, Fut, Res> Handler<((),)> for F
 where
-    F: FnOnce(Request) -> Fut + Clone + Sync + Send + 'static,
+    F: FnOnce() -> Fut + Clone + Sync + Send + 'static,
     Fut: Future<Output = Res> + Send + 'static,
     Res: IntoResponse,
 {
-    type Future = HandlerFuture;
-
-    fn call(&self, request: hyper::Request<Incoming>) -> Self::Future {
+    fn handle_request(
+        &self,
+        _: hyper::Request<Incoming>,
+    ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
         let refer = self.clone();
-        Box::pin(async move { refer(request.into()).await.into_response() })
+        Box::pin(async move { refer().await.into_response() })
     }
+}
 
-    fn referenced(self) -> Arc<dyn Handler<Future = Self::Future> + Send + Sync> {
-        Arc::new(self)
+macro_rules! handlers {
+    ($([$($types: tt)*]);* $(;)?) => {
+        $( handlers!{ $($types)* } )*
+    };
+    ($($type: ident),* | $last: ident) => {
+        paste::paste!{
+            impl<F, Fut, Res, $($type,)* $last> Handler<($($type,)* $last,)> for F
+            where
+                F: FnOnce($($type,)* $last) -> Fut + Clone + Sync + Send + 'static,
+                Fut: Future<Output = Res> + Send + 'static,
+                Res: IntoResponse,
+                $(
+                    $type: FromRequest,
+                )*
+                $last: FromRequestBody,
+            {
+                fn handle_request(
+                    &self,
+                    request: hyper::Request<Incoming>,
+                ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
+                    let refer = self.clone();
+                    Box::pin(async move {
+                        $(
+                            let [<$type:lower>] = $type::from_request(&request);
+                        )*
+                        let [<$last:lower>] = match $last::from_request_body(request).await {
+                            Ok(value) => value,
+                            Err(err) => return Error::from(err).into_response()
+                        };
+                        refer(
+                            $([<$type:lower>],)*
+                            [<$last:lower>],
+                        ).await.into_response()
+                    })
+                }
+            }
+        }
+
     }
+}
+
+handlers! {
+    [|T1];
+    [T1|T2];
+    [T1,T2|T3];
+    [T1,T2,T3|T4];
+    [T1,T2,T3,T4|T5];
+    [T1,T2,T3,T4,T5|T6];
 }

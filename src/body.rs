@@ -7,14 +7,37 @@ use hyper::{
 };
 use serde::Deserialize;
 use serde_json::Value;
+use tela_html::Element;
 
-use crate::{error::Error, response::HTML};
+use crate::{error::Error, Html};
 
 /// Parse the body into repspective types.
 ///
 /// The only required method to implement is `text` as all other types
 /// are parsed from the result of that type
 pub trait ParseBody<'r> {
+    fn form<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
+    where
+        O: Deserialize<'r>,
+        Self: Sized + 'static + Send,
+    {
+        Box::pin(async move {
+            let content = self.text().await.unwrap();
+            serde_qs::from_str(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
+                Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
+                    #[cfg(debug_assertions)]
+                    {
+                        Html(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                    }
+                    #[cfg(not(debug_assertions))]
+                    {
+                        Html(String::new())
+                    }
+                }))
+            })
+        })
+    }
+
     fn json<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
     where
         O: Deserialize<'r>,
@@ -26,11 +49,11 @@ pub trait ParseBody<'r> {
                 Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
                     #[cfg(debug_assertions)]
                     {
-                        HTML(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                        Html(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
                     }
                     #[cfg(not(debug_assertions))]
                     {
-                        HTML(String::new())
+                        Html(String::new())
                     }
                 }))
             })
@@ -52,11 +75,11 @@ pub trait ParseBody<'r> {
                 Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
                     #[cfg(debug_assertions)]
                     {
-                        HTML(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                        Html(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
                     }
                     #[cfg(not(debug_assertions))]
                     {
-                        HTML(String::new())
+                        Html(String::new())
                     }
                 }))
             })
@@ -74,11 +97,11 @@ pub trait ParseBody<'r> {
                 Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
                     #[cfg(debug_assertions)]
                     {
-                        HTML(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                        Html(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
                     }
                     #[cfg(not(debug_assertions))]
                     {
-                        HTML(String::new())
+                        Html(String::new())
                     }
                 }))
             })
@@ -128,7 +151,7 @@ impl IntoBody<Full<Bytes>> for Value {
     }
 }
 
-impl IntoBody<Full<Bytes>> for crate::html::Element {
+impl IntoBody<Full<Bytes>> for Element {
     fn into_body(self) -> Full<Bytes> {
         Full::new(Bytes::from(self.to_string()))
     }

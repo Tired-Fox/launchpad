@@ -1,5 +1,3 @@
-mod returns;
-
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::{
     body::{Bytes, Incoming},
@@ -7,12 +5,12 @@ use hyper::{
 };
 use std::collections::HashMap;
 use std::fmt::Display;
+use tela_html::Element;
 
 use crate::{
     body::{IntoBody, ParseBody},
     error::Error,
 };
-pub use returns::*;
 
 #[derive(Clone)]
 pub struct Builder {
@@ -277,7 +275,7 @@ impl IntoResponse for Empty<Bytes> {
     }
 }
 
-impl IntoResponse for crate::html::Element {
+impl IntoResponse for Element {
     fn into_response(self) -> HttpResponse<Full<Bytes>> {
         hyper::Response::builder()
             .status(200)

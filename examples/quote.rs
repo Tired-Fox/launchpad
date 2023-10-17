@@ -1,19 +1,19 @@
 extern crate tela;
 
-use tela::client::SendRequest;
-use tela::error::Error;
-use tela::server::router::get;
 use tela::{
-    html::Element,
+    html::{self, Element},
     prelude::*,
-    response::{html, HTML},
-    server::{Router, Server, Socket},
+    request::{Body, Head, Headers, Method},
+    server::{
+        router::{get, post},
+        Router, Server, Socket,
+    },
     Request,
 };
 
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct Quote {
     id: Option<String>,
     content: String,
@@ -27,23 +27,24 @@ struct Quote {
 
 /// Credit to: https://github.com/lukePeavey/quotable
 /// This is the api used for getting quotes
-async fn random_quote(_: Request) -> Result<Element, Error> {
+async fn random_quote() -> Element {
     let response = Request::builder()
         .uri("https://api.quotable.io/random")
         .send()
         .await;
 
-    let quote = response.json::<Quote>().await?;
-    Ok(html::new! {
+    let quote: Quote = response.json().await.unwrap();
+    println!("Author: {}", quote.author);
+    html::new! {
         <blockquote>
             <em>{quote.content}</em>
             <br/>
             <strong>"- "{quote.author}</strong>
         </blockquote>
-    })
+    }
 }
 
-async fn home(_: Request) -> Element {
+async fn home() -> Element {
     html::new! {
         <html>
             <head>
@@ -110,7 +111,9 @@ async fn main() {
         .on_bind(|addr| println!("Serving to {}", addr))
         .serve(
             Socket::Local(3000),
-            Router::new().route("/", get(home).post(random_quote)),
+            Router::new()
+                .route("/", get(home))
+                .route("/", post(random_quote)),
         )
         .await;
 }

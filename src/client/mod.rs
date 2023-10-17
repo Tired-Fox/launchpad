@@ -1,5 +1,4 @@
 //! https://hyper.rs/guides/1/client/basic/
-#[cfg(feature = "macros")]
 pub use tela_macros::fetch;
 
 use std::{future::Future, pin::Pin};

@@ -5,18 +5,22 @@ use tela::{
 };
 
 async fn component(props: Props) -> Element {
+    println!("{:?}", props);
+
     html::new! {
         <div>"From async"</div>
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let data = 33;
+    let d = [1, 2, 3, 4, 5];
+
     let attrs = props! {
         data: data,
         name: "tela"
     };
-    let d = [1, 2, 3, 4, 5];
 
     println!(
         "{}",
@@ -32,6 +36,8 @@ fn main() {
                 }}
             </for>
         }
+        // Need to explicitly convert to a String as `Display` is not implemented for an html
+        // element
         .to_string()
     )
 }

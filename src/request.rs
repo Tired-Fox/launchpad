@@ -1,17 +1,26 @@
-use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::Display;
+use std::future::Future;
+use std::{collections::HashMap, pin::Pin};
 
 use http_body_util::BodyExt;
-use hyper::Version;
 use hyper::{
-    body::{Body, Bytes, Incoming},
-    Request as HttpRequest,
+    body::{Bytes, Incoming},
+    http::{request::Parts, HeaderValue},
+    HeaderMap, Request as HttpRequest,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::body::{IntoBody, ParseBody};
 use crate::error::Error;
+use crate::Form;
+use crate::{
+    body::{IntoBody, ParseBody},
+    Json,
+};
+
+pub use hyper::{Method, Uri, Version};
+
+pub type Headers = HeaderMap<HeaderValue>;
 
 pub struct Builder {
     uri: String,
@@ -78,7 +87,7 @@ impl Builder {
 
     pub fn body<B, T>(self, body: T) -> HttpRequest<B>
     where
-        B: Body<Data = Bytes, Error = Infallible>,
+        B: hyper::body::Body<Data = Bytes, Error = Infallible>,
         T: IntoBody<B>,
     {
         let mut builder = HttpRequest::builder()
@@ -123,6 +132,51 @@ impl<'r> ParseBody<'r> for Request {
     }
 }
 
+pub struct Head {
+    pub method: Method,
+    pub version: Version,
+    pub headers: HeaderMap<HeaderValue>,
+    pub uri: Uri,
+}
+
+impl From<Parts> for Head {
+    fn from(value: Parts) -> Self {
+        Head {
+            method: value.method,
+            version: value.version,
+            headers: value.headers,
+            uri: value.uri,
+        }
+    }
+}
+
+impl Head {
+    pub fn new(request: &hyper::Request<Incoming>) -> Self {
+        Head {
+            method: request.method().clone(),
+            version: request.version(),
+            headers: request.headers().clone(),
+            uri: request.uri().clone(),
+        }
+    }
+}
+
+pub struct Body(Incoming);
+impl<'r> ParseBody<'r> for Body {
+    fn text(
+        self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, Error>> + Send>> {
+        Box::pin(async move {
+            String::from_utf8(self.0.collect().await.unwrap().to_bytes().to_vec())
+                .map_err(Error::from)
+        })
+    }
+
+    fn raw(self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<u8>> + Send>> {
+        Box::pin(async move { self.0.collect().await.unwrap().to_bytes().to_vec() })
+    }
+}
+
 impl<'r> Request {
     pub fn new(req: HttpRequest<Incoming>) -> Self {
         Request(req)
@@ -132,8 +186,25 @@ impl<'r> Request {
         Builder::new()
     }
 
-    pub fn uri(&self) -> String {
-        self.0.uri().to_string()
+    pub fn parts(self) -> (Head, Body) {
+        let (head, body) = self.0.into_parts();
+        (Head::from(head), Body(body))
+    }
+
+    pub fn version(&self) -> hyper::Version {
+        self.0.version()
+    }
+
+    pub fn headers(&self) -> &hyper::HeaderMap<hyper::http::HeaderValue> {
+        self.0.headers()
+    }
+
+    pub fn uri(&self) -> &hyper::Uri {
+        self.0.uri()
+    }
+
+    pub fn method(&self) -> &hyper::Method {
+        self.0.method()
     }
 
     pub fn query<T: Deserialize<'r>>(&self) -> Result<T, String> {
@@ -142,5 +213,101 @@ impl<'r> Request {
                 .map_err(|e| e.to_string()),
             None => Err("No query available to parse".to_string()),
         }
+    }
+}
+
+pub trait FromRequest
+where
+    Self: Send + Sized,
+{
+    fn from_request(request: &hyper::Request<Incoming>) -> Self;
+}
+
+impl FromRequest for Version {
+    fn from_request(request: &hyper::Request<Incoming>) -> Self {
+        request.version()
+    }
+}
+
+impl FromRequest for Head {
+    fn from_request(request: &hyper::Request<Incoming>) -> Self {
+        Head::new(request)
+    }
+}
+
+impl FromRequest for Method {
+    fn from_request(request: &hyper::Request<Incoming>) -> Self {
+        request.method().clone()
+    }
+}
+
+impl FromRequest for HashMap<String, String> {
+    fn from_request(request: &hyper::Request<Incoming>) -> Self {
+        request
+            .headers()
+            .iter()
+            .map(|(hn, hv)| (hn.to_string(), hv.to_str().unwrap().to_string()))
+            .collect()
+    }
+}
+
+impl FromRequest for Headers {
+    fn from_request(request: &hyper::Request<Incoming>) -> Self {
+        request.headers().clone()
+    }
+}
+
+impl FromRequest for Uri {
+    fn from_request(request: &hyper::Request<Incoming>) -> Self {
+        request.uri().clone()
+    }
+}
+
+pub trait FromRequestBody
+where
+    Self: Sized + Send,
+{
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>>;
+}
+
+impl FromRequestBody for Body {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async { Ok(Body(request.into_body())) })
+    }
+}
+
+impl FromRequestBody for Request {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async { Ok(Request::from(request)) })
+    }
+}
+
+impl<T: Serialize + Deserialize<'static> + Send> FromRequestBody for Json<T> {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async { Request::from(request).json::<T>().await.map(|v| Json(v)) })
+    }
+}
+
+impl<T: Deserialize<'static> + Send> FromRequestBody for Form<T> {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async { Request::from(request).form::<T>().await.map(|v| Form(v)) })
+    }
+}
+
+impl FromRequestBody for String {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(Request::from(request).text())
     }
 }

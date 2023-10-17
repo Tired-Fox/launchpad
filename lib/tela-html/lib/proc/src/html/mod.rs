@@ -117,7 +117,7 @@ impl ToTokens for Parser {
         if children.len() > 0 {
             let chldrn = self.tokenize_children(children);
             tokens.append_all(quote!({
-                use tela::html::prelude::*;
+                use tela::html::*;
 
                 Element::wrapper(#chldrn)
             }))
