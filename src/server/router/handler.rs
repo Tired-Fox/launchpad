@@ -1,4 +1,10 @@
-use std::{future::Future, pin::Pin};
+use std::{
+    cell::RefCell,
+    future::Future,
+    pin::Pin,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
@@ -6,6 +12,7 @@ use hyper::body::{Bytes, Incoming};
 use crate::{
     prelude::IntoResponse,
     request::{FromRequest, FromRequestBody},
+    server::State,
 };
 
 pub type HandlerFuture = Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send>>;
@@ -27,6 +34,7 @@ where
         _: hyper::Request<Incoming>,
     ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
         let refer = self.clone();
+        let state = Arc::new(RwLock::new(State::default()));
         Box::pin(async move { refer().await.into_response() })
     }
 }
@@ -53,20 +61,29 @@ macro_rules! handlers {
                 ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
                     let refer = self.clone();
                     Box::pin(async move {
-                        $(
-                            let [<$type:lower>] = match $type::from_request(&request) {
+                        let state = Arc::new(State::new(&request));
+
+                        let response = {
+                            $(
+                                let [<$type:lower>] = match $type::from_request(&request, state.clone()) {
+                                    Ok(value) => value,
+                                    Err(err) => return err.into_response()
+                                };
+                            )*
+
+                            let state_clone = state.clone();
+                            let [<$last:lower>] = match $last::from_request_body(request, state_clone).await {
                                 Ok(value) => value,
                                 Err(err) => return err.into_response()
                             };
-                        )*
-                        let [<$last:lower>] = match $last::from_request_body(request).await {
-                            Ok(value) => value,
-                            Err(err) => return err.into_response()
+
+                            refer(
+                                $([<$type:lower>],)*
+                                [<$last:lower>],
+                            ).await.into_response()
                         };
-                        refer(
-                            $([<$type:lower>],)*
-                            [<$last:lower>],
-                        ).await.into_response()
+
+                        state.cookies().append_response(response)
                     })
                 }
             }

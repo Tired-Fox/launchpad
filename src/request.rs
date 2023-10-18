@@ -1,6 +1,7 @@
 use std::convert::Infallible;
 use std::fmt::Display;
 use std::future::Future;
+use std::sync::Arc;
 use std::{collections::HashMap, pin::Pin};
 
 use http_body_util::BodyExt;
@@ -9,14 +10,11 @@ use hyper::{
     http::{request::Parts, HeaderValue},
     HeaderMap, Request as HttpRequest,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
+use crate::body::{IntoBody, ParseBody};
 use crate::error::Error;
-use crate::Form;
-use crate::{
-    body::{IntoBody, ParseBody},
-    Json,
-};
+use crate::server::State;
 
 pub use hyper::{Method, Uri, Version};
 
@@ -106,7 +104,7 @@ impl Builder {
 pub struct Request(HttpRequest<Incoming>);
 
 impl From<HttpRequest<Incoming>> for Request {
-    fn from(value: HttpRequest<Incoming>) -> Self {
+    fn from(mut value: HttpRequest<Incoming>) -> Self {
         Request(value)
     }
 }
@@ -194,7 +192,7 @@ impl<'r> ParseBody<'r> for Body {
 
 impl<'r> Request {
     pub fn new(req: HttpRequest<Incoming>) -> Self {
-        Request(req)
+        Request::from(req)
     }
 
     pub fn builder() -> Builder {
@@ -235,38 +233,38 @@ pub trait FromRequest
 where
     Self: Send + Sized,
 {
-    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error>;
+    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error>;
 }
 
 impl<T> FromRequest for Option<T>
 where
     T: FromRequest,
 {
-    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
-        Ok(T::from_request(request).ok())
+    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
+        Ok(T::from_request(request, state).ok())
     }
 }
 
 impl FromRequest for Version {
-    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
         Ok(request.version())
     }
 }
 
 impl FromRequest for Head {
-    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
         Ok(Head::new(request))
     }
 }
 
 impl FromRequest for Method {
-    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
         Ok(request.method().clone())
     }
 }
 
 impl FromRequest for HashMap<String, String> {
-    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
         Ok(request
             .headers()
             .iter()
@@ -276,13 +274,13 @@ impl FromRequest for HashMap<String, String> {
 }
 
 impl FromRequest for Headers {
-    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
         Ok(request.headers().clone())
     }
 }
 
 impl FromRequest for Uri {
-    fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
         Ok(request.uri().clone())
     }
 }
@@ -293,23 +291,23 @@ where
 {
     fn from_request_body(
         request: hyper::Request<Incoming>,
+        state: Arc<State>,
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>>;
 }
 
-impl<T> FromRequestBody for Option<T>
-where
-    T: FromRequestBody,
-{
+impl<T: FromRequest> FromRequestBody for T {
     fn from_request_body(
         request: hyper::Request<Incoming>,
+        state: Arc<State>,
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
-        Box::pin(async move { Ok(T::from_request_body(request).await.ok()) })
+        Box::pin(async move { T::from_request(&request, state) })
     }
 }
 
 impl FromRequestBody for Body {
     fn from_request_body(
         request: hyper::Request<Incoming>,
+        _state: Arc<State>,
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
         Box::pin(async { Ok(Body(request.into_body())) })
     }
@@ -318,6 +316,7 @@ impl FromRequestBody for Body {
 impl FromRequestBody for Request {
     fn from_request_body(
         request: hyper::Request<Incoming>,
+        _state: Arc<State>,
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
         Box::pin(async { Ok(Request::from(request)) })
     }
@@ -326,6 +325,7 @@ impl FromRequestBody for Request {
 impl FromRequestBody for String {
     fn from_request_body(
         request: hyper::Request<Incoming>,
+        _state: Arc<State>,
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
         Box::pin(Request::from(request).text())
     }

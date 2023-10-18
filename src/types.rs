@@ -8,12 +8,15 @@ pub mod form {
         fmt::{Debug, Display},
         future::Future,
         pin::Pin,
+        sync::Arc,
     };
 
     use hyper::body::Incoming;
     use serde::Deserialize;
 
-    use crate::{body::ParseBody, prelude::Error, request::FromRequestBody, Request};
+    use crate::{
+        body::ParseBody, prelude::Error, request::FromRequestBody, server::State, Request,
+    };
 
     pub struct Form<T>(pub T)
     where
@@ -49,6 +52,7 @@ pub mod form {
     impl<T: Deserialize<'static> + Send> FromRequestBody for Form<T> {
         fn from_request_body(
             request: hyper::Request<Incoming>,
+            _: Arc<State>,
         ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
             Box::pin(async { Request::from(request).form::<T>().await.map(|v| Form(v)) })
         }
@@ -56,12 +60,15 @@ pub mod form {
 }
 
 pub mod query {
-    use std::fmt::{Debug, Display};
+    use std::{
+        fmt::{Debug, Display},
+        sync::Arc,
+    };
 
     use hyper::{body::Incoming, StatusCode};
     use serde::Deserialize;
 
-    use crate::{prelude::Error, request::FromRequest};
+    use crate::{prelude::Error, request::FromRequest, server::State};
 
     pub struct Query<T>(pub T)
     where
@@ -95,7 +102,7 @@ pub mod query {
     }
 
     impl<T: Deserialize<'static> + Send> FromRequest for Query<T> {
-        fn from_request(request: &hyper::Request<Incoming>) -> Result<Self, Error> {
+        fn from_request(request: &hyper::Request<Incoming>, _: Arc<State>) -> Result<Self, Error> {
             let query = match request.uri().query() {
                 Some(query) => query,
                 None => {
@@ -128,14 +135,16 @@ pub mod html {
     use std::fmt::Debug;
     use std::fmt::Display;
 
-    pub use crate::_html_from as from;
     use crate::body::IntoBody;
     use crate::error::Error;
     use crate::response::IntoResponse;
     use http_body_util::Full;
     use hyper::body::Bytes;
+
+    pub use crate::_html_from as from;
     pub use tela_html::html as new;
     pub use tela_html::prelude::*;
+    pub use tela_html::props;
 
     #[macro_export]
     macro_rules! _html_from {
@@ -221,6 +230,7 @@ pub mod json {
         fmt::{Debug, Display},
         future::Future,
         pin::Pin,
+        sync::Arc,
     };
 
     pub use crate::_json_from as from;
@@ -229,6 +239,7 @@ pub mod json {
         error::Error,
         request::FromRequestBody,
         response::IntoResponse,
+        server::State,
         Request,
     };
     use http_body_util::Full;
@@ -306,6 +317,7 @@ pub mod json {
     impl<T: Serialize + Deserialize<'static> + Send> FromRequestBody for Json<T> {
         fn from_request_body(
             request: hyper::Request<Incoming>,
+            _: Arc<State>,
         ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
             Box::pin(async { Request::from(request).json::<T>().await.map(|v| Json(v)) })
         }

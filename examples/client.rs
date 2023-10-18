@@ -2,11 +2,11 @@ extern crate tela;
 
 use hyper::{body::Incoming, Response};
 use serde::Deserialize;
-use std::sync::Arc;
 use tela::{
     client::{fetch, SendRequest},
+    html::{self, Html},
+    json,
     prelude::*,
-    response::{html, json, HTML},
     server::{
         router::{get, post},
         Router, Server, Socket,
@@ -45,7 +45,7 @@ async fn posted(req: Request) -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() {
-    const url: &'static str = "http://127.0.0.1:3000/posted?firstname=Tela&lastname=Web";
+    const URL: &'static str = "http://127.0.0.1:3000/posted?firstname=Tela&lastname=Web";
 
     Server::builder()
         .on_bind(|addr| println!("Serving to {}", addr))
@@ -55,9 +55,9 @@ async fn main() {
                 .route("/posted", post(posted))
                 .route(
                     "/macro",
-                    get(|_| async {
+                    get(|| async {
                         let response: Response<Incoming> = fetch!(
-                            url,
+                            URL,
                             method: post,
                             body: json::new!({
                                 "type": "macro",
@@ -68,16 +68,16 @@ async fn main() {
                         .await;
 
                         match response.text().await {
-                            Ok(text) => HTML(text),
+                            Ok(text) => Html(text),
                             Err(e) => html::from!(<strong>"Error: "{e}</strong>),
                         }
                     }),
                 )
                 .route(
                     "/raw",
-                    get(|_| async {
+                    get(|| async {
                         let response = Request::builder()
-                            .uri(url)
+                            .uri(URL)
                             .method("POST")
                             .body(json::new!({
                                 "type": "raw",
@@ -88,7 +88,7 @@ async fn main() {
                             .await;
 
                         match response.text().await {
-                            Ok(text) => HTML(text),
+                            Ok(text) => Html(text),
                             Err(e) => html::from!(<strong>"Error: "{e}</strong>),
                         }
                     }),

@@ -1,8 +1,8 @@
 pub mod handler;
 
 use std::{
-    collections::HashMap, convert::Infallible, fmt::Debug, future::Future, pin::Pin,
-    sync::Arc,
+    collections::HashMap, convert::Infallible, fmt::Debug, fs::File, future::Future, path::PathBuf,
+    pin::Pin, sync::Arc,
 };
 
 use http_body_util::Full;
@@ -193,13 +193,55 @@ macro_rules! make_methods {
 
 make_methods! {GET, POST, DELETE, PUT, HEAD, CONNECT, OPTIONS, TRACE, PATCH}
 
+pub trait IntoStaticPath {
+    fn static_path_uri(&self, uri: &String) -> String {
+        let mut uri = uri.replace("\\", "/").replace("//", "/");
+        if !uri.starts_with("/") {
+            uri = String::from("/") + uri.as_str();
+        }
+        uri
+    }
+    fn into_static_path(self) -> (String, PathBuf);
+}
+
+impl IntoStaticPath for String {
+    fn into_static_path(self) -> (String, PathBuf) {
+        let uri = self.static_path_uri(&self);
+        (uri, PathBuf::from(self))
+    }
+}
+
+impl IntoStaticPath for &str {
+    fn into_static_path(self) -> (String, PathBuf) {
+        let uri = self.static_path_uri(&self.to_string());
+        (uri, PathBuf::from(self))
+    }
+}
+
+impl<S1: ToString, S2: ToString> IntoStaticPath for (S1, S2) {
+    fn into_static_path(self) -> (String, PathBuf) {
+        let uri = self.static_path_uri(&self.0.to_string());
+        (uri, PathBuf::from(self.1.to_string()))
+    }
+}
+
 pub struct Builder {
     routes: Routes,
+    assets: HashMap<String, PathBuf>,
 }
 
 impl Builder {
     pub fn route(mut self, path: &str, route: Route) -> Self {
         self.routes.insert(path.to_string(), route);
+        self
+    }
+
+    pub fn assets<S: IntoStaticPath>(mut self, path: S) -> Self {
+        let (key, value) = path.into_static_path();
+        if !value.exists() {
+            eprintln!("The static asset path \"{}\" does not exist. It will be ignored until the path is generated.", value.display())
+        }
+        self.assets.insert(key, value);
         self
     }
 
@@ -210,6 +252,7 @@ impl Builder {
     {
         Router {
             handler: None,
+            assets: self.assets.into(),
             routes: Arc::new(Mutex::new(self.routes)),
             fallback: Some(Endpoint(Arc::new(BoxedHandler::from_handler(fallback)))),
         }
@@ -218,6 +261,7 @@ impl Builder {
     pub fn build(self) -> Router {
         Router {
             handler: None,
+            assets: self.assets.into(),
             routes: Arc::new(Mutex::new(self.routes)),
             fallback: None,
         }
@@ -233,6 +277,7 @@ impl Builder {
 #[derive(Clone)]
 pub struct Router {
     pub handler: Option<Endpoint>,
+    pub assets: Arc<HashMap<String, PathBuf>>,
     pub routes: Arc<Mutex<Routes>>,
     pub fallback: Option<Endpoint>,
 }
@@ -241,6 +286,7 @@ impl Router {
     pub async fn handler(
         request: hyper::Request<Incoming>,
         routes: Arc<Mutex<Routes>>,
+        assets: Arc<HashMap<String, PathBuf>>,
         handler: Option<Endpoint>,
         global_fallback: Option<Endpoint>,
     ) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
@@ -248,8 +294,20 @@ impl Router {
             return Ok(handler.call(request).await);
         }
 
+        // Check for matching static asset path
+        {
+            let path = request.uri().path();
+            for (key, value) in assets.iter() {
+                if path.starts_with(key) {
+                    let file_path = value.join(path.replace(key, ""));
+                    if file_path.exists() {
+                        return Ok(file_path.into_response());
+                    }
+                }
+            }
+        }
+
         // Scoped fetch so lock is released after endpoint is fetched
-        // TODO: add static file serving
         let endpoint = {
             let routes = routes.lock().await;
             match routes.fetch(request.uri().path(), &request.method()) {
@@ -272,6 +330,7 @@ impl Router {
     pub fn new() -> Builder {
         Builder {
             routes: Routes::new(),
+            assets: HashMap::new(),
         }
     }
 }
@@ -292,6 +351,7 @@ impl Service<hyper::Request<Incoming>> for Router {
         Box::pin(Router::handler(
             req,
             self.routes.clone(),
+            self.assets.clone(),
             self.handler.clone(),
             self.fallback.clone(),
         ))
@@ -310,6 +370,7 @@ where
     fn into_router(self) -> Router {
         Router {
             handler: Some(Endpoint(Arc::new(BoxedHandler::from_handler(self)))),
+            assets: Arc::new(HashMap::new()),
             routes: Arc::new(Mutex::new(Routes::new())),
             fallback: None,
         }

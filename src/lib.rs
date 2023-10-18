@@ -3,11 +3,11 @@ mod types;
 pub mod prelude;
 
 pub mod body;
+pub mod client;
+pub mod cookie;
+pub mod error;
 pub mod request;
 pub mod response;
-
-pub mod client;
-pub mod error;
 pub mod server;
 
 pub use request::Request;

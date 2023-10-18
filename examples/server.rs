@@ -1,17 +1,13 @@
 extern crate tela;
 
-use hyper::StatusCode;
-use tela::client::SendRequest;
-use tela::response::HTML;
-use tela::server::router::{fallback, get};
 use tela::{
+    html::{self, Html},
     prelude::*,
-    response::html,
-    server::{Router, Server},
+    server::{router::get, Router, Server, StatusCode},
     Request,
 };
 
-async fn not_found(_: Request) -> HTML<String> {
+async fn not_found(_: Request) -> Html<String> {
     // html::from will convert to HTML<String> while
     // html::new! will convert to tela::html::Element.
     // Either may be returned
@@ -20,7 +16,7 @@ async fn not_found(_: Request) -> HTML<String> {
     }
 }
 
-async fn hours(_: Request) -> HTML<String> {
+async fn hours(_: Request) -> Html<String> {
     html::from! {
         <html>
             <head>
@@ -44,6 +40,8 @@ async fn hours(_: Request) -> HTML<String> {
             </head>
             <body>
                 <h1>"Make A Request"</h1>
+                <img src="/images/cat-lounge.jpg" alt="Lounging Cat" />
+                <br />
                 <button type="button" onclick="getPost()">"POST Request"</button>
                 <label for="post-result">"Result"</label>
                 <textarea type="text" id="post-result" disabled title="Result"></textarea>
@@ -59,6 +57,7 @@ async fn main() {
         .serve(
             socket!(3000, 4000),
             Router::new()
+                .assets(("/images/", "examples/assets/"))
                 .route(
                     "/hours",
                     get(hours)

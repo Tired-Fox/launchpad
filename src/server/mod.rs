@@ -2,7 +2,7 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
-use hyper::server::conn::http1;
+use hyper::{body::Incoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
@@ -71,6 +71,7 @@ macro_rules! socket {
     };
 }
 
+use crate::cookie::Cookies;
 pub use crate::socket;
 
 /// Convert a tuple of ([], u16) or ([u8; 4], u16) into a SocketAddr;
@@ -97,6 +98,29 @@ impl IntoSocketAddr for Socket {
             Socket::Local(port) => SocketAddr::from(([127, 0, 0, 1], port)),
             Socket::Network(port) => SocketAddr::from(([0, 0, 0, 0], port)),
         }
+    }
+}
+
+#[derive(Default)]
+pub struct State {
+    cookies: Cookies,
+}
+
+impl State {
+    pub fn new(request: &hyper::Request<Incoming>) -> Self {
+        State {
+            cookies: Cookies::new(match request.headers().get(hyper::header::COOKIE) {
+                Some(v) => v.to_str().unwrap().to_string(),
+                None => String::new(),
+            }),
+        }
+    }
+
+    pub fn cookies(&self) -> &Cookies {
+        &self.cookies
+    }
+    pub fn cookies_mut(&mut self) -> &mut Cookies {
+        &mut self.cookies
     }
 }
 

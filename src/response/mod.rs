@@ -3,8 +3,8 @@ use hyper::{
     body::{Bytes, Incoming},
     Response as HttpResponse, StatusCode, Version,
 };
-use std::collections::HashMap;
-use std::fmt::Display;
+use std::{collections::HashMap, fs, io::Read};
+use std::{fmt::Display, path::PathBuf};
 use tela_html::Element;
 
 use crate::{
@@ -290,6 +290,29 @@ impl IntoResponse for serde_json::Value {
         hyper::Response::builder()
             .status(200)
             .header("Content-Type", "application/json")
+            .body(self.into_body())
+            .unwrap()
+    }
+}
+
+impl IntoBody<Full<Bytes>> for PathBuf {
+    fn into_body(self) -> Full<Bytes> {
+        match fs::read(self) {
+            Ok(file) => Full::new(Bytes::from(file)),
+            Err(e) => {
+                eprintln!("Error while serving file: {}", e);
+                Full::default()
+            }
+        }
+    }
+}
+
+impl IntoResponse for PathBuf {
+    fn into_response(self) -> HttpResponse<Full<Bytes>> {
+        let mime = mime_guess::from_path(&self).first_or_text_plain();
+        hyper::Response::builder()
+            .status(200)
+            .header("Content-Type", mime.to_string())
             .body(self.into_body())
             .unwrap()
     }

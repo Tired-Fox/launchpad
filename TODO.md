@@ -5,26 +5,26 @@
 - [x] Check if `FnOnce` is more appropriate
 - [x] Extractor magic for handler params. Includes auto parsing of request body
 - [x] Merge duplicate route definitions
-- [ ] Serve specific static file directories
+- [x] Serve specific static file directories
 - [ ] Dynamic routes and path captures
-```
-"/blog/{...slug}/updates/"
-
-async fn handler(captures: Captures) -> impl IntoResponse {
-  let slug: String = captures.get("slug");
-}
-```
+  ```
+  "/blog/{...slug}/updates/"
+  
+  async fn handler(captures: Captures) -> impl IntoResponse {
+    let slug: String = captures.get("slug");
+  }
+  ```
 - [ ] Add service/Tower layer support per handler and per route
 - [ ] Traits and API for adding markup languages like Handlebars and Tera
-```
-Server.templates("/templates/").server(...);
-
-fn home(templates: Templates) -> impl IntoResponse {
-  templates.render("home", &Context::default()) 
-}
-```
+  ```
+  Server.templates("/templates/").server(...);
+  
+  fn home(templates: Templates) -> impl IntoResponse {
+    templates.render("home", &Context::default()) 
+  }
+  ```
 - [ ] Sensitive data redaction for logs
-- [ ] Cookie utils
+- [x] Cookie utils. Allows for retrieving, setting, and deleting cookies
 - [ ] Refine features and make them rich, fast, and easy to use
 
 - HTML macro
