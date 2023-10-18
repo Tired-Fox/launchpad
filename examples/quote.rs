@@ -98,6 +98,7 @@ async fn home() -> Element {
                 "#</script>
             </head>
             <body>
+                <!-- "Credit to: https://github.com/lukePeavey/quotable for the quotes api" -->
                 <div id="quote">
                 </div>
             </body>
