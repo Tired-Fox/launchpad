@@ -71,7 +71,8 @@ macro_rules! socket {
     };
 }
 
-use crate::cookie::Cookies;
+use crate::cookie::CookieJar;
+
 pub use crate::socket;
 
 /// Convert a tuple of ([], u16) or ([u8; 4], u16) into a SocketAddr;
@@ -103,23 +104,23 @@ impl IntoSocketAddr for Socket {
 
 #[derive(Default)]
 pub struct State {
-    cookies: Cookies,
+    cookies: CookieJar,
 }
 
 impl State {
     pub fn new(request: &hyper::Request<Incoming>) -> Self {
         State {
-            cookies: Cookies::new(match request.headers().get(hyper::header::COOKIE) {
+            cookies: CookieJar::new(match request.headers().get(hyper::header::COOKIE) {
                 Some(v) => v.to_str().unwrap().to_string(),
                 None => String::new(),
             }),
         }
     }
 
-    pub fn cookies(&self) -> &Cookies {
+    pub fn cookies(&self) -> &CookieJar {
         &self.cookies
     }
-    pub fn cookies_mut(&mut self) -> &mut Cookies {
+    pub fn cookies_mut(&mut self) -> &mut CookieJar {
         &mut self.cookies
     }
 }

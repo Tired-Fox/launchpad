@@ -1,7 +1,6 @@
 extern crate tela;
 
 use tela::{
-    cookie::{Cookie, Cookies},
     html::{self, Element},
     prelude::*,
     query::Query,
@@ -30,19 +29,11 @@ struct Quote {
 
 /// Credit to: https://github.com/lukePeavey/quotable
 /// This is the api used for getting quotes
-async fn random_quote(mut cookies: Cookies) -> Element {
+async fn random_quote() -> Element {
     let response = Request::builder()
         .uri("https://api.quotable.io/random")
         .send()
         .await;
-
-    if let Some(_) = cookies.get("One") {
-        cookies.delete("One");
-        cookies.set("Two", Cookie::new("2"));
-    } else {
-        cookies.delete("Two");
-        cookies.set("One", Cookie::new("1"));
-    }
 
     let quote: Quote = response.json().await.unwrap();
     println!("Author: {}", quote.author);
@@ -55,9 +46,7 @@ async fn random_quote(mut cookies: Cookies) -> Element {
     }
 }
 
-async fn home(mut cookies: Cookies) -> Element {
-    cookies.set("count", Cookie::new(0));
-
+async fn home() -> Element {
     html::new! {
         <html>
             <head>

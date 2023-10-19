@@ -3,7 +3,7 @@ use hyper::{
     body::{Bytes, Incoming},
     Response as HttpResponse, StatusCode, Version,
 };
-use std::{collections::HashMap, fs, io::Read};
+use std::{collections::HashMap, fs};
 use std::{fmt::Display, path::PathBuf};
 use tela_html::Element;
 

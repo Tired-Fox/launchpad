@@ -1,18 +1,19 @@
 use std::{
-    collections::{hash_map, HashMap},
+    collections::HashMap,
     fmt::Display,
     str::FromStr,
-    sync::{Arc, RwLock, RwLockReadGuard},
+    sync::{Arc, RwLock},
 };
 
-use chrono::{naive::NaiveDateTime, DateTime, FixedOffset, Local, TimeZone};
+use chrono::{naive::NaiveDateTime, FixedOffset, TimeZone};
+pub use chrono::{DateTime, Duration, Local};
 use chrono_tz::GMT;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 
 use crate::{prelude::Error, request::FromRequest, server::State};
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub enum SameSite {
     Strict,
     Lax,
@@ -46,6 +47,14 @@ impl IntoCookieExpiration for &str {
     }
 }
 
+impl IntoCookieExpiration for String {
+    fn into_cookie_expiration(self) -> DateTime<FixedOffset> {
+        let naive = NaiveDateTime::from_str(self.as_str()).unwrap();
+        let local = Local.from_local_datetime(&naive).unwrap();
+        local.with_timezone(&GMT).fixed_offset()
+    }
+}
+
 impl IntoCookieExpiration for DateTime<Local> {
     fn into_cookie_expiration(self) -> DateTime<FixedOffset> {
         self.with_timezone(&GMT).fixed_offset()
@@ -55,8 +64,15 @@ impl IntoCookieExpiration for DateTime<Local> {
 #[derive(Default)]
 pub struct Builder(Cookie);
 impl Builder {
-    pub fn domain(mut self, domain: String) -> Self {
-        self.0.domain = Some(domain);
+    pub fn new(content: String) -> Self {
+        Builder(Cookie {
+            content,
+            ..Default::default()
+        })
+    }
+
+    pub fn domain(mut self, domain: &str) -> Self {
+        self.0.domain = Some(domain.to_string());
         self
     }
     pub fn expires<T: IntoCookieExpiration>(mut self, expires: T) -> Self {
@@ -91,13 +107,47 @@ impl Builder {
         self
     }
 
-    pub fn eat<T: ToString>(mut self, value: T) -> Cookie {
-        self.0.content = value.to_string();
+    pub fn finish(self) -> Cookie {
         self.0
     }
 }
 
-#[derive(Default, Clone)]
+/// A data representation of a Set-Cookie header.
+///
+/// This object allows the value and properties of a cookie to be built up.
+/// This doesn't include the name of the cookies. However, if `cookie.stringify("Name")` is called
+/// on the cookie it will take the cookie name and generate the header string value. Stringifying
+/// the cookie will also replace all `;` in the cookie value with `%3B` to help reduce the
+/// limitations of the cookie value.
+///
+/// # Example
+/// ```
+/// // Don't forget to enable the `cookies` feature flag
+///
+/// // The `Local` and `Durations` objects are from the `chrono` crate
+/// use tela::cookie::{Cookie, Local, Duration};
+///
+/// Cookie::new(3)
+///
+/// // or
+///
+/// Cookie::builder("value")
+///    .domain("example.com")
+///    .expires(Local::now() + Duration::hours(12))
+///    .expires("03/22/2023 10:44:12") // Assumed to be local time zone
+///    .http_only()
+///    .max_age(-1)
+///    .partitioned()
+///    .path("/sub/path/here")
+///    .same_site(SameSite::Strict)
+///    .secure()
+///    .finish()
+///
+/// ```
+///
+/// Refer to [Set-Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) for
+/// more on what each value means
+#[derive(Default, Clone, Debug)]
 pub struct Cookie {
     content: String,
     domain: Option<String>,
@@ -127,8 +177,8 @@ impl Cookie {
         }
     }
 
-    pub fn builder() -> Builder {
-        Builder::default()
+    pub fn builder<T: ToString>(content: T) -> Builder {
+        Builder::new(content.to_string())
     }
 
     pub fn stringify(&self, name: &str) -> String {
@@ -176,15 +226,53 @@ impl Cookie {
     }
 }
 
-#[derive(Default, Clone)]
-pub struct Cookies {
+/// Utility object to read request cookies and send new cookies in a response.
+///
+/// The cookies being sent back in the response creates a lock whenever a cookie is added and is release when
+/// the cookie is done being added. Each CookieJar is unique to each request so this shouldn't be an issue as
+/// long as this is kept in mind while creating the endpoint.
+///
+/// The escape code `%3B` is converted to `;` along with `;` to `%3B` to allow the limitations of
+/// what can be stored in the cookies
+///
+/// Supported actions include: `get`, `set`, and `delete`.
+/// - `Get` will return the specific cookie by name if it exists.
+/// - `Set` will take a cookie name along with a `Cookie` and store it in a map. This map generates
+///     `Set-Cookie` headers for each new cookie being sent in the response.
+/// - `Delete` is the same as `set` except it will create the cookie for you and set the `Max-Age`
+///     property to -1 to tell the browser to immediatly delete the cookie.
+///
+/// # Example
+/// ```
+/// // Don't forget to toggle the `cookies` feature flag
+///
+/// use tela::cookie::{CookieJar, Cookie, Local, Duration};
+/// use tela::{server::{Server, Router, Socket, router::get}}
+///
+/// async fn handler(mut cookies: CookieJar) {
+///     match cookies.get("TelaExample") {
+///         Some(cookie) => cookies.delete("TelaExample"),
+///         None => cookies.set("TelaExample", Cookie::new(1))
+///     };
+/// }
+///
+/// async fn main() {
+///     Server::new().serve(
+///         Socket::Local(3000),
+///         Router::new()
+///             .route("/", get(handler))
+///     ).await;
+/// }
+/// ```
+#[derive(Default, Clone, Debug)]
+pub struct CookieJar {
     request: Arc<HashMap<String, String>>,
     response: Arc<RwLock<HashMap<String, Cookie>>>,
 }
 
-impl Cookies {
+impl CookieJar {
     pub fn new(cookies: String) -> Self {
-        Cookies {
+        CookieJar {
             request: Arc::new(
                 cookies
                     .split(";")
@@ -193,7 +281,7 @@ impl Cookies {
                             return None;
                         }
                         let v = v.split_once("=").unwrap();
-                        Some((v.0.to_string(), v.1.replace("%3B", ";")))
+                        Some((v.0.trim().to_string(), v.1.replace("%3B", ";")))
                     })
                     .collect(),
             ),
@@ -242,7 +330,7 @@ impl Cookies {
     }
 }
 
-impl FromRequest for Cookies {
+impl FromRequest for CookieJar {
     fn from_request(_request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
         Ok(state.cookies().clone())
     }

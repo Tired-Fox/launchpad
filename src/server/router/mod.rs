@@ -1,8 +1,8 @@
 pub mod handler;
 
 use std::{
-    collections::HashMap, convert::Infallible, fmt::Debug, fs::File, future::Future, path::PathBuf,
-    pin::Pin, sync::Arc,
+    collections::HashMap, convert::Infallible, fmt::Debug, future::Future, path::PathBuf, pin::Pin,
+    sync::Arc,
 };
 
 use http_body_util::Full;

@@ -104,7 +104,7 @@ impl Builder {
 pub struct Request(HttpRequest<Incoming>);
 
 impl From<HttpRequest<Incoming>> for Request {
-    fn from(mut value: HttpRequest<Incoming>) -> Self {
+    fn from(value: HttpRequest<Incoming>) -> Self {
         Request(value)
     }
 }
@@ -246,25 +246,25 @@ where
 }
 
 impl FromRequest for Version {
-    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, _state: Arc<State>) -> Result<Self, Error> {
         Ok(request.version())
     }
 }
 
 impl FromRequest for Head {
-    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, _state: Arc<State>) -> Result<Self, Error> {
         Ok(Head::new(request))
     }
 }
 
 impl FromRequest for Method {
-    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, _state: Arc<State>) -> Result<Self, Error> {
         Ok(request.method().clone())
     }
 }
 
 impl FromRequest for HashMap<String, String> {
-    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, _state: Arc<State>) -> Result<Self, Error> {
         Ok(request
             .headers()
             .iter()
@@ -274,13 +274,13 @@ impl FromRequest for HashMap<String, String> {
 }
 
 impl FromRequest for Headers {
-    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, _state: Arc<State>) -> Result<Self, Error> {
         Ok(request.headers().clone())
     }
 }
 
 impl FromRequest for Uri {
-    fn from_request(request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
+    fn from_request(request: &hyper::Request<Incoming>, _state: Arc<State>) -> Result<Self, Error> {
         Ok(request.uri().clone())
     }
 }

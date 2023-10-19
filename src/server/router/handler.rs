@@ -1,10 +1,4 @@
-use std::{
-    cell::RefCell,
-    future::Future,
-    pin::Pin,
-    rc::Rc,
-    sync::{Arc, RwLock},
-};
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
@@ -34,7 +28,6 @@ where
         _: hyper::Request<Incoming>,
     ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
         let refer = self.clone();
-        let state = Arc::new(RwLock::new(State::default()));
         Box::pin(async move { refer().await.into_response() })
     }
 }
