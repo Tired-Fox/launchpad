@@ -11,7 +11,11 @@ use chrono_tz::GMT;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 
-use crate::{prelude::Error, request::FromRequest, server::State};
+use crate::{
+    prelude::Error,
+    request::{FromRequest, FromRequestBody},
+    server::State,
+};
 
 #[derive(Default, Clone, Debug)]
 pub enum SameSite {
@@ -333,5 +337,14 @@ impl CookieJar {
 impl FromRequest for CookieJar {
     fn from_request(_request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
         Ok(state.cookies().clone())
+    }
+}
+
+impl FromRequestBody for CookieJar {
+    fn from_request_body(
+        _request: hyper::Request<Incoming>,
+        state: Arc<State>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async move { Ok(state.cookies().clone()) })
     }
 }

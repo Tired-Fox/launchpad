@@ -12,6 +12,7 @@ use crate::{
     error::Error,
 };
 
+/// Response builder
 #[derive(Clone)]
 pub struct Builder {
     response: Response,
@@ -23,6 +24,7 @@ impl Builder {
         }
     }
 
+    /// Set the http response status
     pub fn status<S>(mut self, status: S) -> Self
     where
         S: IntoStatusCode,
@@ -31,6 +33,7 @@ impl Builder {
         self
     }
 
+    /// Add a response header.
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
         K: Display,
@@ -42,6 +45,7 @@ impl Builder {
         self
     }
 
+    /// Set the response body and return a Response.
     pub fn body<B>(mut self, body: B) -> Response
     where
         B: Into<Bytes>,
@@ -81,6 +85,9 @@ impl<'r> ParseBody<'r> for hyper::Response<Incoming> {
     }
 }
 
+/// A http response representation including status, headers, http version, and body.
+///
+/// This is a rough clone of hyper::Response
 #[derive(Clone)]
 pub struct Response {
     status: StatusCode,
@@ -147,6 +154,7 @@ impl Response {
     }
 }
 
+/// Convert the current object into a `hyper::Response<http_body_utils::Full<hyper::body::Bytes>>`.
 pub trait IntoResponse {
     fn into_response(self) -> HttpResponse<Full<Bytes>>;
 }
@@ -304,16 +312,5 @@ impl IntoBody<Full<Bytes>> for PathBuf {
                 Full::default()
             }
         }
-    }
-}
-
-impl IntoResponse for PathBuf {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        let mime = mime_guess::from_path(&self).first_or_text_plain();
-        hyper::Response::builder()
-            .status(200)
-            .header("Content-Type", mime.to_string())
-            .body(self.into_body())
-            .unwrap()
     }
 }

@@ -16,6 +16,7 @@ use crate::{error::Error, Html};
 /// The only required method to implement is `text` as all other types
 /// are parsed from the result of that type
 pub trait ParseBody<'r> {
+    /// Parse the body as a form/query string.
     fn form<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
     where
         O: Deserialize<'r>,
@@ -27,7 +28,7 @@ pub trait ParseBody<'r> {
                 Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
                     #[cfg(debug_assertions)]
                     {
-                        Html(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                        Html(content.to_string())
                     }
                     #[cfg(not(debug_assertions))]
                     {
@@ -38,6 +39,7 @@ pub trait ParseBody<'r> {
         })
     }
 
+    /// Parse the body as a json string.
     fn json<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
     where
         O: Deserialize<'r>,
@@ -49,7 +51,7 @@ pub trait ParseBody<'r> {
                 Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
                     #[cfg(debug_assertions)]
                     {
-                        Html(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                        Html(content.to_string())
                     }
                     #[cfg(not(debug_assertions))]
                     {
@@ -60,33 +62,14 @@ pub trait ParseBody<'r> {
         })
     }
 
+    /// Get the body as a raw String.
     fn text(self) -> Pin<Box<dyn Future<Output = Result<String, Error>> + Send>>;
 
+    /// Get the body as raw bytes.
     fn raw(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>>;
 
-    fn multipart<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
-    where
-        O: Deserialize<'r>,
-        Self: Sized + 'static + Send,
-    {
-        Box::pin(async move {
-            let content = self.text().await.unwrap();
-            serde_qs::from_str::<O>(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
-                Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
-                    #[cfg(debug_assertions)]
-                    {
-                        Html(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
-                    }
-                    #[cfg(not(debug_assertions))]
-                    {
-                        Html(String::new())
-                    }
-                }))
-            })
-        })
-    }
-
-    fn primitive<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
+    /// Parse the body as a top level primitive (basic) type.
+    fn base<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
     where
         O: Deserialize<'r>,
         Self: Sized + 'static + Send,
@@ -97,7 +80,7 @@ pub trait ParseBody<'r> {
                 Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
                     #[cfg(debug_assertions)]
                     {
-                        Html(html_to_string_macro::html!(<pre>{content.to_string()}</pre>))
+                        Html(content.to_string())
                     }
                     #[cfg(not(debug_assertions))]
                     {

@@ -248,6 +248,14 @@ impl Parse for Fetch {
                     "method" => fetch.method = Some(Fetch::parse_method(input)?),
                     "version" => fetch.version = Some(Fetch::parse_version(input)?),
                     "body" => fetch.body = Fetch::parse_body(input)?,
+                    "headers" => {
+                        if !input.peek(Brace) {
+                            abort!(key, "must have a braced block after this argument")
+                        }
+                        let headers;
+                        braced!(headers in input);
+                        fetch.headers = Fetch::parse_headers(&headers)?;
+                    }
                     _ => {
                         abort!(key.span(), "Unkown fetch option"; help="Try `method`, `version`, or `body`")
                     }

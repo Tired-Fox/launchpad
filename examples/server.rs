@@ -3,11 +3,11 @@ extern crate tela;
 use tela::{
     html::{self, Html},
     prelude::*,
+    request::Body,
     server::{router::get, Router, Server, StatusCode},
-    Request,
 };
 
-async fn not_found(_: Request) -> Html<String> {
+async fn not_found() -> Html<String> {
     // html::from will convert to HTML<String> while
     // html::new! will convert to tela::html::Element.
     // Either may be returned
@@ -16,7 +16,7 @@ async fn not_found(_: Request) -> Html<String> {
     }
 }
 
-async fn hours(_: Request) -> Html<String> {
+async fn hours() -> Html<String> {
     html::from! {
         <html>
             <head>
@@ -56,13 +56,13 @@ async fn main() {
         .on_bind(|addr| println!("Serving to {}", addr))
         .serve(
             socket!(3000, 4000),
-            Router::new()
+            Router::builder()
                 .assets(("/images/", "examples/assets/"))
                 .route(
                     "/hours",
                     get(hours)
-                        .post(|req: Request| async {
-                            match req.text().await {
+                        .post(|body: Body| async {
+                            match body.text().await {
                                 Ok(body) => println!("{}", body),
                                 Err(e) => eprintln!("{}", e),
                             }
@@ -70,7 +70,7 @@ async fn main() {
                         })
                         .fallback(not_found),
                 )
-                .fallback(not_found),
+                .any(not_found),
         )
         .await;
 }

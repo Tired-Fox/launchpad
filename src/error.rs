@@ -12,6 +12,7 @@ use crate::{
     response::{IntoResponse, IntoStatusCode},
 };
 
+/// Tela's generic Error type
 #[derive(Debug, Clone)]
 pub struct Error {
     pub status: StatusCode,

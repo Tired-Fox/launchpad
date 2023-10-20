@@ -18,6 +18,7 @@ pub mod form {
         body::ParseBody, prelude::Error, request::FromRequestBody, server::State, Request,
     };
 
+    /// Represents the Form/Query in the requests body
     pub struct Form<T>(pub T)
     where
         T: Deserialize<'static>;
@@ -62,14 +63,20 @@ pub mod form {
 pub mod query {
     use std::{
         fmt::{Debug, Display},
+        pin::Pin,
         sync::Arc,
     };
 
     use hyper::{body::Incoming, StatusCode};
     use serde::Deserialize;
 
-    use crate::{prelude::Error, request::FromRequest, server::State};
+    use crate::{
+        prelude::Error,
+        request::{FromRequest, FromRequestBody},
+        server::State,
+    };
 
+    /// Represets the uri query
     pub struct Query<T>(pub T)
     where
         T: Deserialize<'static>;
@@ -119,7 +126,7 @@ pub mod query {
                 Err(err) => {
                     use serde_qs::Error as qsError;
                     match err {
-                        qsError::Unsupported => match serde_plain::from_str::<T>(static_query) {
+                        qsError::Custom(_) => match serde_plain::from_str::<T>(static_query) {
                             Ok(value) => Ok(Query(value)),
                             _ => Err(Error::from(err)),
                         },
@@ -127,6 +134,15 @@ pub mod query {
                     }
                 }
             }
+        }
+    }
+
+    impl<T: Deserialize<'static> + Send> FromRequestBody for Query<T> {
+        fn from_request_body(
+            request: hyper::Request<Incoming>,
+            _state: Arc<State>,
+        ) -> Pin<Box<dyn std::future::Future<Output = Result<Self, Error>> + Send>> {
+            Box::pin(async move { Query::<T>::from_request(&request, _state) })
         }
     }
 }
@@ -157,6 +173,7 @@ pub mod html {
         };
     }
 
+    /// Represents the html in a request or response body.
     pub struct Html<T>(pub T)
     where
         T: IntoBody<Full<Bytes>>;
@@ -255,6 +272,7 @@ pub mod json {
         };
     }
 
+    /// Represents the json in the request or response body.
     pub struct Json<T>(pub T)
     where
         T: Serialize + Deserialize<'static>;

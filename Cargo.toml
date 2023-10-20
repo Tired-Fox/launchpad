@@ -11,7 +11,7 @@ tela-html = { path="lib/tela-html" }
 
 html-to-string-macro = "0.2.5"
 http-body-util = "0.1.0-rc.3"
-hyper = { version = "1.0.0-rc.4", features = ["full"] }
+hyper = { version = "1.0.0-rc.4", default_features = false, features = ["client", "http-body-util", "server", "http1"] }
 # TODO: Resolve when final release is set
 hyper-util = { git = "https://github.com/hyperium/hyper-util.git" } 
 paste = "1.0.14"
@@ -19,11 +19,13 @@ serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.107"
 serde_plain = "1.0.2"
 serde_qs = "0.12.0"
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.32.0", features = ["rt", "signal", "macros", "rt-multi-thread", "fs", "bytes"] }
 mime_guess = "2.0.4"
 chrono = "0.4.31"
 base64 = "0.21.4"
 chrono-tz = "0.8.3"
+regex = "1.10.2"
+lazy_static = "1.4.0"
 
 [features]
 auto-escape=["tela-html/auto-escape"]

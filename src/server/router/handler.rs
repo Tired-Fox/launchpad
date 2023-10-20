@@ -10,8 +10,12 @@ use crate::{
 };
 
 pub type HandlerFuture = Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send>>;
+
+/// Base trait that allows object and methods to be used as a handler.
+///
+/// This trait is responsible for calling and driving handlers processing a request.
 pub trait Handler<IN = ()>: Send + Sync + 'static {
-    fn handle_request(
+    fn handle(
         &self,
         request: hyper::Request<Incoming>,
     ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>>;
@@ -23,7 +27,7 @@ where
     Fut: Future<Output = Res> + Send + 'static,
     Res: IntoResponse,
 {
-    fn handle_request(
+    fn handle(
         &self,
         _: hyper::Request<Incoming>,
     ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
@@ -48,7 +52,7 @@ macro_rules! handlers {
                 )*
                 $last: FromRequestBody,
             {
-                fn handle_request(
+                fn handle(
                     &self,
                     request: hyper::Request<Incoming>,
                 ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {

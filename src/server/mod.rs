@@ -12,7 +12,7 @@ pub mod router;
 pub use hyper::http::StatusCode;
 pub use router::Router;
 
-/// Defines whether the socket address should be localhost or on the network.
+/// Represents a local or network socket.
 pub enum Socket {
     Local(u16),
     Network(u16),
@@ -125,6 +125,10 @@ impl State {
     }
 }
 
+/// Server struct that handles some events around binding and connections.
+///
+/// The `serve` method when called will start a server and handle request and put them through
+/// the provided router.
 pub struct Server {
     on_bind: Option<Box<dyn Fn(SocketAddr)>>,
     on_connection: Option<Box<dyn Fn(SocketAddr)>>,
@@ -147,32 +151,21 @@ impl Server {
     /// Serve a hyper + tokio async server. Let the passed in handler or Router be what each request is resolved
     /// by.
     ///
-    /// See [hyper.rs v1.0 server](https://hyper.rs/guides/1/server/hello-world/) hello world examples **Starting the Server** section for a close comparison of what this method does behind the scenes.
+    /// See [hyper.rs v1.0 server](https://hyper.rs/guides/1/server/hello-world/) hello world example **Starting the Server** section for a close comparison of what this method does behind the scenes.
     ///
     /// # Example
     /// ```
-    /// use tela::{response::Response, server::{serve, IntoSocketAddr}};
+    /// use tela::{server::{Server, IntoSocketAddr}};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     serve(Socket::default(), handler).await;
+    ///     Server::new().serve(
+    ///         Socket::default(),
+    ///         handler
+    ///     ).await
     /// }
     ///
-    /// /// Request is a wrapper around hypers Request<Incoming>
-    /// ///
-    /// /// Tela chose this route as this will provide useful helpers for
-    /// /// operating on the current request.
-    /// async fn handler(_: Request) ->  Response {
-    ///     Response::builder()
-    ///         .body("Hello, world!")
-    ///
-    ///     // or
-    ///
-    ///     Response::builder()
-    ///         .status(404)
-    ///         .header("Content-Type", "text/plain")
-    ///         .body("Could not handle request")
-    /// }
+    /// async fn handler() {}
     /// ```
     pub async fn serve<Addr, R>(self, addr: Addr, router: R)
     where
@@ -217,6 +210,7 @@ impl Builder {
         Builder(Server::new())
     }
 
+    /// Define a handler that is called with a `SocketAddr` when the server finishes binding.
     pub fn on_bind<F>(mut self, handler: F) -> Self
     where
         F: Fn(SocketAddr) + 'static,
@@ -225,6 +219,7 @@ impl Builder {
         self
     }
 
+    /// Define a handler that is called for every request connection.
     pub fn on_connection<F>(mut self, handler: F) -> Self
     where
         F: Fn(SocketAddr) + 'static,
@@ -233,6 +228,7 @@ impl Builder {
         self
     }
 
+    /// Define a handler that is called for every unhandled server hyper error.
     pub fn on_connection_error<F>(mut self, handler: F) -> Self
     where
         F: Fn(Box<dyn std::error::Error>) + Send + Sync + 'static,
@@ -245,6 +241,25 @@ impl Builder {
         self.0
     }
 
+    /// Serve a hyper + tokio async server. Let the passed in handler or Router be what each request is resolved
+    /// by.
+    ///
+    /// See [hyper.rs v1.0 server](https://hyper.rs/guides/1/server/hello-world/) hello world example **Starting the Server** section for a close comparison of what this method does behind the scenes.
+    ///
+    /// # Example
+    /// ```
+    /// use tela::{server::{Server, IntoSocketAddr}};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     Server::new().serve(
+    ///         Socket::default(),
+    ///         handler
+    ///     ).await
+    /// }
+    ///
+    /// async fn handler() {}
+    /// ```
     pub async fn serve<Addr, R>(self, addr: Addr, router: R)
     where
         Addr: IntoSocketAddr,

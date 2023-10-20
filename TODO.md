@@ -6,6 +6,7 @@
 - [x] Extractor magic for handler params. Includes auto parsing of request body
 - [x] Merge duplicate route definitions
 - [x] Serve specific static file directories
+- [ ] Path groupings for routes so they may be defined elsewhere.
 - [ ] Dynamic routes and path captures
   ```
   "/blog/{...slug}/updates/"

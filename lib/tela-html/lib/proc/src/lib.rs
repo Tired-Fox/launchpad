@@ -8,6 +8,9 @@ use syn::{parse_macro_input, DeriveInput};
 mod html;
 use html::Parser;
 
+/// Generate an html ast out of lightweight html tag structs.
+///
+/// See `tela::html` for the exposed objects.
 #[proc_macro_error]
 #[proc_macro]
 pub fn html(input: TokenStream) -> TokenStream {

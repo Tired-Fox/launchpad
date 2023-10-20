@@ -1,0 +1,37 @@
+use tela::{
+    html,
+    server::{router::get, Router, Server, Socket},
+};
+
+lazy_static::lazy_static! {
+    static ref MULTI_SLASH: regex::Regex = Regex::new(r#"/+"#).unwrap();
+    static ref WRAP_SLASH: regex::Regex = Regex::new(r#"^/|/$"#).unwrap();
+}
+
+/// "/some/route/:path/nested"
+/// "/some/route/:...path"
+
+fn tokenize(uri: &String) -> Vec<String> {
+    let mut result = Vec::new();
+
+    let mut uri = uri.trim().replace("\\", "/");
+    let uri = WRAP_SLASH.replace_all(&MULTI_SLASH.replace_all(uri.as_str(), ""), "");
+    println!("{}", uri)
+
+    result
+}
+
+async fn handler() -> html::Element {
+    html::new!(<h1>"Hello, world!"</h1>)
+}
+
+#[tela::main]
+async fn main() {
+    Server::builder()
+        .on_bind(|addr| println!("{}", addr))
+        .serve(
+            Socket::Local(3000),
+            Router::builder().route("/", get(handler)),
+        )
+        .await;
+}

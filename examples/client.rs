@@ -51,7 +51,7 @@ async fn main() {
         .on_bind(|addr| println!("Serving to {}", addr))
         .serve(
             Socket::Local(3000),
-            Router::new()
+            Router::builder()
                 .route("/posted", post(posted))
                 .route(
                     "/macro",

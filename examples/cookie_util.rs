@@ -46,6 +46,9 @@ async fn handler(mut cookies: CookieJar) -> html::Element {
 async fn main() {
     Server::builder()
         .on_bind(|addr| println!("Serving to {}", addr))
-        .serve(Socket::Local(3000), Router::new().route("/", get(handler)))
+        .serve(
+            Socket::Local(3000),
+            Router::builder().route("/", get(handler)),
+        )
         .await;
 }

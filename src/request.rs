@@ -20,6 +20,7 @@ pub use hyper::{Method, Uri, Version};
 
 pub type Headers = HeaderMap<HeaderValue>;
 
+/// Request builder
 pub struct Builder {
     uri: String,
     headers: HashMap<String, String>,
@@ -43,6 +44,7 @@ impl Builder {
         Builder::default()
     }
 
+    /// Set the request uri.
     pub fn uri<T>(mut self, uri: T) -> Self
     where
         T: ToString,
@@ -51,6 +53,7 @@ impl Builder {
         self
     }
 
+    /// Add a request header.
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
         K: ToString,
@@ -60,6 +63,7 @@ impl Builder {
         self
     }
 
+    /// Set the reqeust method.
     pub fn method<M>(mut self, method: M) -> Self
     where
         M: ToString,
@@ -68,6 +72,7 @@ impl Builder {
         self
     }
 
+    /// Set the request http version.
     pub fn version(mut self, version: f32) -> Self {
         if version == 0.9 {
             self.version = Version::HTTP_09;
@@ -83,6 +88,7 @@ impl Builder {
         self
     }
 
+    /// Set the requests body and return the Request
     pub fn body<B, T>(self, body: T) -> HttpRequest<B>
     where
         B: hyper::body::Body<Data = Bytes, Error = Infallible>,
@@ -101,6 +107,10 @@ impl Builder {
     }
 }
 
+/// Wrapper around a hyper::Request<Incoming> that has helpers
+/// for accessing and converting the data.
+///
+/// This object also allows for sending a request as a client with the `SendRequest` trait.
 pub struct Request(HttpRequest<Incoming>);
 
 impl From<HttpRequest<Incoming>> for Request {
@@ -145,6 +155,7 @@ impl<'r> ParseBody<'r> for Request {
     }
 }
 
+/// Represents the different parts of a requests head properites.
 pub struct Head {
     pub method: Method,
     pub version: Version,
@@ -174,6 +185,9 @@ impl Head {
     }
 }
 
+/// Wrapper around a request `hyper::body::Incoming` body.
+///
+/// This wrapper has utility methods for converting the body to another data type.
 pub struct Body(Incoming);
 impl<'r> ParseBody<'r> for Body {
     fn text(
@@ -191,14 +205,17 @@ impl<'r> ParseBody<'r> for Body {
 }
 
 impl<'r> Request {
+    /// A new wrapper around a hyper::Request.
     pub fn new(req: HttpRequest<Incoming>) -> Self {
         Request::from(req)
     }
 
+    /// Build a request.
     pub fn builder() -> Builder {
         Builder::new()
     }
 
+    /// Split the request into it's `Head` and `Body`.
     pub fn parts(self) -> (Head, Body) {
         let (head, body) = self.0.into_parts();
         (Head::from(head), Body(body))
@@ -220,6 +237,7 @@ impl<'r> Request {
         self.0.method()
     }
 
+    /// Get the uri's query as another data type.
     pub fn query<T: Deserialize<'r>>(&self) -> Result<T, String> {
         match self.0.uri().query() {
             Some(query) => serde_qs::from_str::<T>(Box::leak(String::from(query).into_boxed_str()))
@@ -295,12 +313,12 @@ where
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>>;
 }
 
-impl<T: FromRequest> FromRequestBody for T {
+impl<T: FromRequestBody> FromRequestBody for Option<T> {
     fn from_request_body(
         request: hyper::Request<Incoming>,
         state: Arc<State>,
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
-        Box::pin(async move { T::from_request(&request, state) })
+        Box::pin(async { Ok(T::from_request_body(request, state).await.ok()) })
     }
 }
 
@@ -328,5 +346,65 @@ impl FromRequestBody for String {
         _state: Arc<State>,
     ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
         Box::pin(Request::from(request).text())
+    }
+}
+
+impl FromRequestBody for Version {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+        _state: Arc<State>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async move { Ok(request.version()) })
+    }
+}
+
+impl FromRequestBody for Head {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+        _state: Arc<State>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async move { Ok(Head::new(&request)) })
+    }
+}
+
+impl FromRequestBody for Method {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+        _state: Arc<State>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async move { Ok(request.method().clone()) })
+    }
+}
+
+impl FromRequestBody for HashMap<String, String> {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+        _state: Arc<State>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async move {
+            Ok(request
+                .headers()
+                .iter()
+                .map(|(hn, hv)| (hn.to_string(), hv.to_str().unwrap().to_string()))
+                .collect())
+        })
+    }
+}
+
+impl FromRequestBody for Headers {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+        _state: Arc<State>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async move { Ok(request.headers().clone()) })
+    }
+}
+
+impl FromRequestBody for Uri {
+    fn from_request_body(
+        request: hyper::Request<Incoming>,
+        _state: Arc<State>,
+    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
+        Box::pin(async move { Ok(request.uri().clone()) })
     }
 }
