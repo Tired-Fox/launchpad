@@ -157,20 +157,30 @@ pub mod html {
     use http_body_util::Full;
     use hyper::body::Bytes;
 
-    pub use crate::_html_from as from;
+    pub use crate::_html as into;
     pub use tela_html::html as new;
     pub use tela_html::prelude::*;
     pub use tela_html::props;
 
+    #[doc = "Same as html::new! except `into` is automatically called on the result"]
     #[macro_export]
-    macro_rules! _html_from {
+    macro_rules! _html {
         ($($html: tt)*) => {
-            $crate::Html(
-                $crate::html::new! {
-                    $($html)*
-                }.to_string()
-            )
+            $crate::html::new! {
+                $($html)*
+            }.into()
         };
+        ($type: ty as $($html: tt)*) => {
+            Into::<$type>::into($crate::html::new! {
+                $($html)*
+            })
+        };
+    }
+
+    impl From<tela_html::Element> for Html<String> {
+        fn from(value: tela_html::Element) -> Self {
+            Html(value.to_string())
+        }
     }
 
     /// Represents the html in a request or response body.
@@ -250,7 +260,7 @@ pub mod json {
         sync::Arc,
     };
 
-    pub use crate::_json_from as from;
+    pub use crate::_json as into;
     use crate::{
         body::{IntoBody, ParseBody},
         error::Error,
@@ -263,13 +273,21 @@ pub mod json {
     use hyper::body::{Bytes, Incoming};
     pub use serde_json::json as new;
 
+    #[doc = "Same as json::new! except `into` is automatically called on the result"]
     #[macro_export]
-    macro_rules! _json_from {
-        ($($json: tt)*) => {
-            $crate::Json(
-                $crate::json::new!($($json)*)
-            )
+    macro_rules! _json {
+        ($type: ty as {$($json: tt)*}) => {
+            Into::<$type>::into($crate::json::new!({$($json)*}))
         };
+        ({$($json: tt)*}) => {
+            $crate::json::new!({$($json)*}).into()
+        };
+    }
+
+    impl From<Value> for Json<String> {
+        fn from(value: Value) -> Self {
+            Json(value.to_string())
+        }
     }
 
     /// Represents the json in the request or response body.

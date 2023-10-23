@@ -1,7 +1,8 @@
 use http_body_util::{BodyExt, Empty, Full};
+pub use hyper::StatusCode;
 use hyper::{
     body::{Bytes, Incoming},
-    Response as HttpResponse, StatusCode, Version,
+    Response as HttpResponse, Version,
 };
 use std::{collections::HashMap, fs};
 use std::{fmt::Display, path::PathBuf};

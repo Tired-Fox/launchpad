@@ -9,6 +9,8 @@ use crate::{
     server::State,
 };
 
+use super::route::Captures;
+
 pub type HandlerFuture = Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send>>;
 
 /// Base trait that allows object and methods to be used as a handler.
@@ -18,6 +20,7 @@ pub trait Handler<IN = ()>: Send + Sync + 'static {
     fn handle(
         &self,
         request: hyper::Request<Incoming>,
+        catches: Captures,
     ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>>;
 }
 
@@ -30,6 +33,7 @@ where
     fn handle(
         &self,
         _: hyper::Request<Incoming>,
+        _: Captures,
     ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
         let refer = self.clone();
         Box::pin(async move { refer().await.into_response() })
@@ -55,10 +59,11 @@ macro_rules! handlers {
                 fn handle(
                     &self,
                     request: hyper::Request<Incoming>,
+                    catches: Captures,
                 ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
                     let refer = self.clone();
                     Box::pin(async move {
-                        let state = Arc::new(State::new(&request));
+                        let state = Arc::new(State::new(&request, catches));
 
                         let response = {
                             $(

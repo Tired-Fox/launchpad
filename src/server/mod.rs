@@ -6,7 +6,7 @@ use hyper::{body::Incoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
-use self::router::IntoRouter;
+use self::router::{route::Captures, IntoRouter};
 
 pub mod router;
 pub use hyper::http::StatusCode;
@@ -105,15 +105,17 @@ impl IntoSocketAddr for Socket {
 #[derive(Default)]
 pub struct State {
     cookies: CookieJar,
+    catches: Captures,
 }
 
 impl State {
-    pub fn new(request: &hyper::Request<Incoming>) -> Self {
+    pub fn new(request: &hyper::Request<Incoming>, catches: Captures) -> Self {
         State {
             cookies: CookieJar::new(match request.headers().get(hyper::header::COOKIE) {
                 Some(v) => v.to_str().unwrap().to_string(),
                 None => String::new(),
             }),
+            catches,
         }
     }
 

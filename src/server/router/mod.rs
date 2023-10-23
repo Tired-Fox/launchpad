@@ -1,4 +1,7 @@
 pub mod handler;
+pub mod route;
+
+pub use route::*;
 
 use std::{
     collections::HashMap, convert::Infallible, fmt::Debug, future::Future, path::PathBuf, pin::Pin,
@@ -17,225 +20,7 @@ use crate::{error::Error, response::IntoResponse};
 
 use handler::Handler;
 
-/// Wrapper around a route handler pointer.
-#[derive(Clone)]
-struct BoxedHandler<I>(Arc<dyn Handler<I>>);
-
-impl<I> BoxedHandler<I>
-where
-    I: Send + Sync + 'static,
-{
-    pub fn from_handler<H>(handler: H) -> Self
-    where
-        H: Handler<I>,
-    {
-        BoxedHandler(Arc::new(handler))
-    }
-
-    pub async fn call(&self, request: hyper::Request<Incoming>) -> hyper::Response<Full<Bytes>> {
-        (self.0).handle(request).await
-    }
-}
-
-/// Allows the dynamic route handler pointer to be called.
-pub trait ErasedHandler: Send + Sync + 'static {
-    fn call(
-        &self,
-        request: hyper::Request<Incoming>,
-    ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + '_>>;
-}
-
-impl<I> ErasedHandler for BoxedHandler<I>
-where
-    I: Send + Sync + 'static,
-{
-    fn call(
-        &self,
-        request: hyper::Request<Incoming>,
-    ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + '_>> {
-        Box::pin(self.call(request))
-    }
-}
-
-/// Wrapper around a route handler.
-#[derive(Clone)]
-pub struct Endpoint(Arc<dyn ErasedHandler>);
-
-impl Debug for Endpoint {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Endpoint",)
-    }
-}
-
-/// A wrapper that holds handlers for a given route.
-#[derive(Debug)]
-pub struct Route {
-    callbacks: RouteMethods,
-}
-
-impl Route {
-    fn replace_or_not(endpoint: &mut Option<Endpoint>, new: Option<Endpoint>) {
-        if let Some(_) = &new {
-            *endpoint = new
-        }
-    }
-}
-
-/// A wrapper arround a mapping routes to their handlers.
-#[derive(Debug)]
-pub struct Routes(HashMap<String, Route>);
-
-impl Routes {
-    pub fn insert(&mut self, key: String, value: Route) -> Option<Route> {
-        if self.0.contains_key(&key) {
-            self.0.get_mut(&key).unwrap().merge(value);
-            None
-        } else {
-            self.0.insert(key, value)
-        }
-    }
-
-    pub fn fetch(&self, uri: &str, method: &hyper::Method) -> Option<&Endpoint> {
-        if !self.0.contains_key(uri) {
-            return None;
-        }
-
-        self.0.get(uri).unwrap().fetch(&method)
-    }
-
-    pub fn new() -> Self {
-        Routes(HashMap::new())
-    }
-}
-
-#[doc = "Create a new route with the handler that handles any request method"]
-pub fn any<H, T>(handler: H) -> Route
-where
-    H: Handler<T>,
-    T: Send + Sync + 'static,
-{
-    Route {
-        callbacks: RouteMethods {
-            any: Some(Endpoint(Arc::new(BoxedHandler::from_handler(handler)))),
-            ..Default::default()
-        },
-    }
-}
-
-macro_rules! make_methods {
-    ($($method: ident),*) => {
-        paste::paste! {
-            $(
-                #[doc="Create a new route with the " $method " method handler"]
-                pub fn [<$method:lower>]<H, T>(callback: H) -> $crate::server::router::Route
-                where
-                    H: Handler<T>,
-                    T: Send + Sync + 'static
-                {
-                    $crate::server::router::Route {
-                        callbacks: $crate::server::router::RouteMethods {
-                            [<$method:lower>]: Some($crate::server::router::Endpoint(Arc::new(BoxedHandler::from_handler(callback)))),
-                            ..Default::default()
-                        },
-                    }
-                }
-            )*
-        }
-        paste::paste! {
-            impl Route {
-                /// Merge duplicate route paths together. New handlers override old handlers.
-                fn merge(&mut self, new: Route) {
-                    $(Route::replace_or_not(&mut self.callbacks.[<$method:lower>], new.callbacks.[<$method:lower>]);)*
-                }
-
-                pub fn fetch(&self, method: &hyper::Method) -> Option<&Endpoint> {
-                    use hyper::Method;
-                    match method {
-                        $(&Method::$method => match &self.callbacks.[<$method:lower>]{
-                            // If endpoint doesn't exist use fallback
-                            None => self.callbacks.any.as_ref(),
-                            Some(valid) => Some(valid)
-                        },)*
-                        _ => None,
-                    }
-                }
-
-                #[doc="Any method handler"]
-                pub fn any<H, T>(mut self, handler: H) -> Self
-                where
-                    H: Handler<T>,
-                    T: Send + Sync + 'static
-                {
-                    self.callbacks.any =
-                        Some($crate::server::router::Endpoint(Arc::new(BoxedHandler::from_handler(handler))));
-                    self
-                }
-
-                $(
-                    #[doc=$method " method handler"]
-                    pub fn [<$method:lower>]<H, T>(mut self, handler: H) -> Self
-                    where
-                        H: Handler<T>,
-                        T: Send + Sync + 'static
-                    {
-                        self.callbacks.[<$method:lower>] =
-                            Some($crate::server::router::Endpoint(Arc::new(BoxedHandler::from_handler(handler))));
-                        self
-                    }
-                )*
-            }
-        }
-        paste::paste! {
-            /// All method handlers for a given route.
-            #[derive(Default, Debug)]
-            pub struct RouteMethods {
-                $([<$method:lower>]: Option<Endpoint>,)*
-                any: Option<Endpoint>,
-            }
-        }
-    };
-}
-
-make_methods! {GET, POST, DELETE, PUT, HEAD, CONNECT, OPTIONS, TRACE, PATCH}
-
-/// Convert a path into a uri path starting with `/`.
-///
-/// # Example
-/// ```
-/// "some/path\\here" -> "/some/path/here"
-/// ```
-pub(crate) fn to_uri(uri: &String) -> String {
-    let mut uri = uri.replace("\\", "/").replace("//", "/");
-    if !uri.starts_with("/") {
-        uri = String::from("/") + uri.as_str();
-    }
-    uri
-}
-
-pub trait IntoStaticPath {
-    fn into_static_path(self) -> (String, PathBuf);
-}
-
-impl IntoStaticPath for String {
-    fn into_static_path(self) -> (String, PathBuf) {
-        let uri = to_uri(&self);
-        (uri, PathBuf::from(self))
-    }
-}
-
-impl IntoStaticPath for &str {
-    fn into_static_path(self) -> (String, PathBuf) {
-        let uri = to_uri(&self.to_string());
-        (uri, PathBuf::from(self))
-    }
-}
-
-impl<S1: ToString, S2: ToString> IntoStaticPath for (S1, S2) {
-    fn into_static_path(self) -> (String, PathBuf) {
-        let uri = to_uri(&self.0.to_string());
-        (uri, PathBuf::from(self.1.to_string()))
-    }
-}
+use self::route::{BoxedHandler, Endpoint, IntoStaticPath, Route, Routes};
 
 /// Router builder struct.
 pub struct Builder {
@@ -314,7 +99,7 @@ impl Builder {
             handler: None,
             assets: self.assets.into(),
             routes: Arc::new(Mutex::new(self.routes)),
-            any: Some(Endpoint(Arc::new(BoxedHandler::from_handler(handler)))),
+            any: Some(Endpoint::new(BoxedHandler::from_handler(handler))),
         }
     }
 
@@ -347,7 +132,7 @@ impl Router {
         any: Option<Endpoint>,
     ) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
         if let Some(Endpoint(handler)) = handler {
-            return Ok(handler.call(request).await);
+            return Ok(handler.call(request, Captures::new()).await);
         }
 
         // Check for matching static asset path
@@ -372,13 +157,13 @@ impl Router {
         }
 
         // Scoped fetch so lock is released after endpoint is fetched
-        let endpoint = {
-            let routes = routes.lock().await;
+        let (endpoint, catches) = {
+            let mut routes = routes.lock().await;
             match routes.fetch(request.uri().path(), &request.method()) {
-                Some(callback) => callback.clone(),
+                Some((callback, catches)) => (callback.clone(), catches.clone()),
                 None => {
                     if let Some(endpoint) = &any {
-                        endpoint.clone()
+                        (endpoint.clone(), Captures::new())
                     } else {
                         return Ok(
                             Error::from((StatusCode::NOT_FOUND, "Page not found")).into_response()
@@ -388,7 +173,7 @@ impl Router {
             }
         };
 
-        Ok(endpoint.0.call(request).await)
+        Ok(endpoint.0.call(request, catches).await)
     }
 
     /// Create a new router which can have builder methods chained.
