@@ -6,7 +6,7 @@
 - [x] Extractor magic for handler params. Includes auto parsing of request body
 - [x] Merge duplicate route definitions
 - [x] Serve specific static file directories
-- [ ] Path groupings for routes so they may be defined elsewhere.
+- [x] Cookie utils. Allows for retrieving, setting, and deleting cookies
 - [x] Dynamic routes and path captures
   ```
   "/blog/{...slug}/updates/"
@@ -15,17 +15,12 @@
     let slug: String = captures.get("slug");
   }
   ```
+- [ ] State that is set up by the user and passed down to handlers
+  - This allows for things like template engines to be set up and then
+  implemented in the users state
+- [ ] Path groupings for routes so they may be defined elsewhere.
 - [ ] Add service/Tower layer support per handler and per route
-- [ ] Traits and API for adding markup languages like Handlebars and Tera
-  ```
-  Server.templates("/templates/").server(...);
-  
-  fn home(templates: Templates) -> impl IntoResponse {
-    templates.render("home", &Context::default()) 
-  }
-  ```
 - [ ] Sensitive data redaction for logs
-- [x] Cookie utils. Allows for retrieving, setting, and deleting cookies
 - [ ] Refine features and make them rich, fast, and easy to use
 
 - HTML macro

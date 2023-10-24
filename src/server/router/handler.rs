@@ -1,42 +1,46 @@
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{future::Future, sync::Arc};
 
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 
 use crate::{
     prelude::IntoResponse,
-    request::{FromRequest, FromRequestBody},
-    server::State,
+    request::{FromRequest, FromRequestParts},
+    server::Parts,
 };
 
 use super::route::Captures;
-
-pub type HandlerFuture = Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send>>;
+use async_trait::async_trait;
 
 /// Base trait that allows object and methods to be used as a handler.
 ///
 /// This trait is responsible for calling and driving handlers processing a request.
-pub trait Handler<IN = ()>: Send + Sync + 'static {
-    fn handle(
+#[async_trait]
+pub trait Handler<IN, S: Send + Sync + Clone + 'static = ()>: Send + Sync + 'static {
+    async fn handle(
         &self,
         request: hyper::Request<Incoming>,
+        state: Option<S>,
         catches: Captures,
-    ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>>;
+    ) -> hyper::Response<Full<Bytes>>;
 }
 
-impl<F, Fut, Res> Handler<((),)> for F
+#[async_trait]
+impl<F, Fut, Res, S: Send + Sync + 'static> Handler<(), S> for F
 where
     F: FnOnce() -> Fut + Clone + Sync + Send + 'static,
     Fut: Future<Output = Res> + Send + 'static,
     Res: IntoResponse,
+    S: Send + Sync + Clone + 'static,
 {
-    fn handle(
+    async fn handle(
         &self,
         _: hyper::Request<Incoming>,
+        _: Option<S>,
         _: Captures,
-    ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
-        let refer = self.clone();
-        Box::pin(async move { refer().await.into_response() })
+    ) -> hyper::Response<Full<Bytes>> {
+        let handler = self.clone();
+        handler().await.into_response()
     }
 }
 
@@ -46,47 +50,48 @@ macro_rules! handlers {
     };
     ($($type: ident),* | $last: ident) => {
         paste::paste!{
-            impl<F, Fut, Res, $($type,)* $last> Handler<($($type,)* $last,)> for F
+            #[async_trait]
+            impl<F, Fut, Res, S, $($type,)* $last> Handler<($($type,)* $last,), S> for F
             where
                 F: FnOnce($($type,)* $last) -> Fut + Clone + Sync + Send + 'static,
                 Fut: Future<Output = Res> + Send + 'static,
                 Res: IntoResponse,
+                S: Send + Sync + Clone + 'static,
                 $(
-                    $type: FromRequest,
+                    $type: FromRequestParts<S>,
                 )*
-                $last: FromRequestBody,
+                $last: FromRequest<S>,
             {
-                fn handle(
+                async fn handle(
                     &self,
                     request: hyper::Request<Incoming>,
+                    state: Option<S>,
                     catches: Captures,
-                ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + 'static>> {
-                    let refer = self.clone();
-                    Box::pin(async move {
-                        let state = Arc::new(State::new(&request, catches));
+                ) -> hyper::Response<Full<Bytes>> {
+                    let handler = self.clone();
+                    let state = Arc::new(Parts::new(&request, state, catches));
 
-                        let response = {
-                            $(
-                                let [<$type:lower>] = match $type::from_request(&request, state.clone()) {
-                                    Ok(value) => value,
-                                    Err(err) => return err.into_response()
-                                };
-                            )*
-
-                            let state_clone = state.clone();
-                            let [<$last:lower>] = match $last::from_request_body(request, state_clone).await {
+                    let response = {
+                        $(
+                            let [<$type:lower>] = match $type::from_request_parts(&request, state.clone()) {
                                 Ok(value) => value,
                                 Err(err) => return err.into_response()
                             };
+                        )*
 
-                            refer(
-                                $([<$type:lower>],)*
-                                [<$last:lower>],
-                            ).await.into_response()
+                        let state_clone = state.clone();
+                        let [<$last:lower>] = match $last::from_request(request, state_clone).await {
+                            Ok(value) => value,
+                            Err(err) => return err.into_response()
                         };
 
-                        state.cookies().append_response(response)
-                    })
+                        handler(
+                            $([<$type:lower>],)*
+                            [<$last:lower>],
+                        ).await.into_response()
+                    };
+
+                    state.cookies().append_response(response)
                 }
             }
         }

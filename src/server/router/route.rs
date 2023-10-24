@@ -1,15 +1,16 @@
 use std::{
-    any, cmp::Ordering, collections::HashMap, fmt::Debug, future::Future, path::PathBuf, pin::Pin,
-    str::FromStr, sync::Arc,
+    any, cmp::Ordering, collections::HashMap, fmt::Debug, path::PathBuf, str::FromStr, sync::Arc,
 };
 
+use async_trait::async_trait;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 
 use crate::{
     error::Error,
-    request::{FromRequest, FromRequestBody},
+    request::{FromRequest, FromRequestParts},
     response::StatusCode,
+    server::Parts,
 };
 
 use super::handler::Handler;
@@ -104,22 +105,22 @@ impl Captures {
     }
 }
 
-impl FromRequest for Captures {
-    fn from_request(
+impl<T: Send + Sync + Clone + 'static> FromRequestParts<T> for Captures {
+    fn from_request_parts(
         _request: &hyper::Request<Incoming>,
-        state: Arc<crate::server::State>,
+        parts: Arc<Parts<T>>,
     ) -> Result<Self, Error> {
-        Ok(state.catches.clone())
+        Ok(parts.catches.clone())
     }
 }
 
-impl FromRequestBody for Captures {
-    fn from_request_body(
+#[async_trait]
+impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Captures {
+    async fn from_request(
         _request: hyper::Request<Incoming>,
-        state: Arc<crate::server::State>,
-    ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
-        let catches = state.catches.clone();
-        Box::pin(async move { Ok(catches) })
+        parts: Arc<Parts<T>>,
+    ) -> Result<Self, Error> {
+        Ok(parts.catches.clone())
     }
 }
 
@@ -263,15 +264,16 @@ impl RoutePath {
 
 /// Wrapper around a route handler pointer.
 #[derive(Clone)]
-pub struct BoxedHandler<I>(Arc<dyn Handler<I>>);
+pub struct BoxedHandler<S: Send + Sync + Clone + 'static, I>(Arc<dyn Handler<I, S>>);
 
-impl<I> BoxedHandler<I>
+impl<S, I> BoxedHandler<S, I>
 where
     I: Send + Sync + 'static,
+    S: Send + Sync + Clone + 'static,
 {
     pub fn from_handler<H>(handler: H) -> Self
     where
-        H: Handler<I>,
+        H: Handler<I, S>,
     {
         BoxedHandler(Arc::new(handler))
     }
@@ -279,44 +281,53 @@ where
     pub async fn call(
         &self,
         request: hyper::Request<Incoming>,
+        state: Option<S>,
         catches: Captures,
     ) -> hyper::Response<Full<Bytes>> {
-        (self.0).handle(request, catches).await
+        (self.0).handle(request, state, catches).await
     }
 }
 
 /// Allows the dynamic route handler pointer to be called.
-pub trait ErasedHandler: Send + Sync + 'static {
-    fn call(
+#[async_trait]
+pub trait ErasedHandler<S: Send + Sync + Clone + 'static>: Send + Sync + 'static {
+    async fn call(
         &self,
         request: hyper::Request<Incoming>,
+        state: Option<S>,
         catches: Captures,
-    ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + '_>>;
+    ) -> hyper::Response<Full<Bytes>>;
 }
 
-impl<I> ErasedHandler for BoxedHandler<I>
+#[async_trait]
+impl<I, S> ErasedHandler<S> for BoxedHandler<S, I>
 where
     I: Send + Sync + 'static,
+    S: Send + Sync + Clone + 'static,
 {
-    fn call(
+    async fn call(
         &self,
         request: hyper::Request<Incoming>,
+        state: Option<S>,
         catches: Captures,
-    ) -> Pin<Box<dyn Future<Output = hyper::Response<Full<Bytes>>> + Send + '_>> {
-        Box::pin(self.call(request, catches))
+    ) -> hyper::Response<Full<Bytes>> {
+        self.call(request, state, catches).await
     }
 }
 
 /// Wrapper around a route handler.
 #[derive(Clone)]
-pub struct Endpoint(pub Arc<dyn ErasedHandler>);
-impl Endpoint {
-    pub fn new<E: ErasedHandler>(handler: E) -> Self {
+pub struct Endpoint<S: Send + Sync + Clone + 'static>(pub Arc<dyn ErasedHandler<S>>);
+impl<S> Endpoint<S>
+where
+    S: Send + Sync + Clone + 'static,
+{
+    pub fn new<E: ErasedHandler<S>>(handler: E) -> Self {
         Endpoint(Arc::new(handler))
     }
 }
 
-impl Debug for Endpoint {
+impl<S: Send + Sync + Clone + 'static> Debug for Endpoint<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Endpoint",)
     }
@@ -324,12 +335,12 @@ impl Debug for Endpoint {
 
 /// A wrapper that holds handlers for a given route.
 #[derive(Debug)]
-pub struct Route {
-    callbacks: RouteMethods,
+pub struct Route<S: Send + Sync + Clone + 'static> {
+    callbacks: RouteMethods<S>,
 }
 
-impl Route {
-    fn replace_or_not(endpoint: &mut Option<Endpoint>, new: Option<Endpoint>) {
+impl<S: Send + Sync + Clone + 'static> Route<S> {
+    fn replace_or_not(endpoint: &mut Option<Endpoint<S>>, new: Option<Endpoint<S>>) {
         if let Some(_) = &new {
             *endpoint = new
         }
@@ -338,13 +349,13 @@ impl Route {
 
 /// A wrapper arround a mapping routes to their handlers.
 #[derive(Debug)]
-pub struct Routes {
-    paths: Vec<(RoutePath, Route)>,
+pub struct Routes<S: Send + Sync + Clone + 'static> {
+    paths: Vec<(RoutePath, Route<S>)>,
     cache: HashMap<String, (usize, Captures)>,
 }
 
-impl Routes {
-    pub fn insert(&mut self, key: String, value: Route) {
+impl<S: Send + Sync + Clone + 'static> Routes<S> {
+    pub fn insert(&mut self, key: String, value: Route<S>) {
         match self
             .paths
             .iter_mut()
@@ -355,7 +366,7 @@ impl Routes {
         }
     }
 
-    pub fn fetch(&mut self, uri: &str, method: &hyper::Method) -> Option<(&Endpoint, Captures)> {
+    pub fn fetch(&mut self, uri: &str, method: &hyper::Method) -> Option<(&Endpoint<S>, Captures)> {
         let key = RoutePath::normalize(&uri.to_string());
         if self.cache.contains_key(&key) {
             let (index, catches) = self.cache.get(&key).unwrap();
@@ -400,9 +411,9 @@ impl Routes {
 }
 
 #[doc = "Create a new route with the handler that handles any request method"]
-pub fn any<H, T>(handler: H) -> Route
+pub fn any<H, T, S: Send + Sync + Clone + 'static>(handler: H) -> Route<S>
 where
-    H: Handler<T>,
+    H: Handler<T, S>,
     T: Send + Sync + 'static,
 {
     Route {
@@ -418,10 +429,11 @@ macro_rules! make_methods {
         paste::paste! {
             $(
                 #[doc="Create a new route with the " $method " method handler"]
-                pub fn [<$method:lower>]<H, T>(callback: H) -> crate::server::router::route::Route
+                pub fn [<$method:lower>]<H, T, S>(callback: H) -> crate::server::router::route::Route<S>
                 where
-                    H: Handler<T>,
-                    T: Send + Sync + 'static
+                    H: Handler<T, S>,
+                    T: Send + Sync + 'static,
+                    S: Send + Sync + Clone + 'static,
                 {
                     crate::server::router::route::Route {
                         callbacks: crate::server::router::route::RouteMethods {
@@ -433,13 +445,13 @@ macro_rules! make_methods {
             )*
         }
         paste::paste! {
-            impl Route {
+            impl<S: Send + Sync + Clone + 'static> Route<S> {
                 /// Merge duplicate route paths together. New handlers override old handlers.
-                fn merge(&mut self, new: Route) {
+                fn merge(&mut self, new: Route<S>) {
                     $(Route::replace_or_not(&mut self.callbacks.[<$method:lower>], new.callbacks.[<$method:lower>]);)*
                 }
 
-                pub fn fetch(&self, method: &hyper::Method) -> Option<&Endpoint> {
+                pub fn fetch(&self, method: &hyper::Method) -> Option<&Endpoint<S>> {
                     use hyper::Method;
                     match method {
                         $(&Method::$method => match &self.callbacks.[<$method:lower>]{
@@ -454,8 +466,8 @@ macro_rules! make_methods {
                 #[doc="Any method handler"]
                 pub fn any<H, T>(mut self, handler: H) -> Self
                 where
-                    H: Handler<T>,
-                    T: Send + Sync + 'static
+                    H: Handler<T, S>,
+                    T: Send + Sync + 'static,
                 {
                     self.callbacks.any =
                         Some($crate::server::router::route::Endpoint(Arc::new(BoxedHandler::from_handler(handler))));
@@ -466,8 +478,8 @@ macro_rules! make_methods {
                     #[doc=$method " method handler"]
                     pub fn [<$method:lower>]<H, T>(mut self, handler: H) -> Self
                     where
-                        H: Handler<T>,
-                        T: Send + Sync + 'static
+                        H: Handler<T, S>,
+                        T: Send + Sync + 'static,
                     {
                         self.callbacks.[<$method:lower>] =
                             Some($crate::server::router::route::Endpoint(Arc::new(BoxedHandler::from_handler(handler))));
@@ -478,10 +490,19 @@ macro_rules! make_methods {
         }
         paste::paste! {
             /// All method handlers for a given route.
-            #[derive(Default, Debug)]
-            pub struct RouteMethods {
-                $([<$method:lower>]: Option<Endpoint>,)*
-                any: Option<Endpoint>,
+            #[derive(Debug)]
+            pub struct RouteMethods<S: Send + Sync + Clone + 'static> {
+                $([<$method:lower>]: Option<Endpoint<S>>,)*
+                any: Option<Endpoint<S>>,
+            }
+
+            impl<S: Send + Sync + Clone + 'static> Default for RouteMethods<S> {
+                fn default() -> Self {
+                    RouteMethods {
+                        any: None,
+                        $([<$method:lower>]: None,)*
+                    }
+                }
             }
         }
     };

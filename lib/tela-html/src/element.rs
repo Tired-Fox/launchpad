@@ -275,12 +275,6 @@ fn display(element: &Element) -> Option<String> {
     }
 }
 
-impl From<Element> for Element {
-    fn from(value: Element) -> Self {
-        value
-    }
-}
-
 impl Debug for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(result) = debug(self, 0) {

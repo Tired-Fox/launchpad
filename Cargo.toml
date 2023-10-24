@@ -26,6 +26,7 @@ base64 = "0.21.4"
 chrono-tz = "0.8.3"
 regex = "1.10.2"
 lazy_static = "1.4.0"
+async-trait = "0.1.74"
 
 [features]
 auto-escape=["tela-html/auto-escape"]

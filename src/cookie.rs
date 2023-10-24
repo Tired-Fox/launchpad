@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use async_trait::async_trait;
 use chrono::{naive::NaiveDateTime, FixedOffset, TimeZone};
 pub use chrono::{DateTime, Duration, Local};
 use chrono_tz::GMT;
@@ -13,8 +14,8 @@ use hyper::body::{Bytes, Incoming};
 
 use crate::{
     prelude::Error,
-    request::{FromRequest, FromRequestBody},
-    server::State,
+    request::{FromRequest, FromRequestParts},
+    server::Parts,
 };
 
 #[derive(Default, Clone, Debug)]
@@ -334,17 +335,21 @@ impl CookieJar {
     }
 }
 
-impl FromRequest for CookieJar {
-    fn from_request(_request: &hyper::Request<Incoming>, state: Arc<State>) -> Result<Self, Error> {
-        Ok(state.cookies().clone())
+impl<T: Send + Sync + Clone + 'static> FromRequestParts<T> for CookieJar {
+    fn from_request_parts(
+        _request: &hyper::Request<Incoming>,
+        parts: Arc<Parts<T>>,
+    ) -> Result<Self, Error> {
+        Ok(parts.cookies().clone())
     }
 }
 
-impl FromRequestBody for CookieJar {
-    fn from_request_body(
+#[async_trait]
+impl<T: Send + Sync + Clone + 'static> FromRequest<T> for CookieJar {
+    async fn from_request(
         _request: hyper::Request<Incoming>,
-        state: Arc<State>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self, Error>> + Send>> {
-        Box::pin(async move { Ok(state.cookies().clone()) })
+        parts: Arc<Parts<T>>,
+    ) -> Result<Self, Error> {
+        Ok(parts.cookies().clone())
     }
 }

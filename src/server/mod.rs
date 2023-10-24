@@ -102,28 +102,34 @@ impl IntoSocketAddr for Socket {
     }
 }
 
-#[derive(Default)]
-pub struct State {
+pub struct Parts<T: Send + Sync + Clone + 'static> {
     cookies: CookieJar,
     catches: Captures,
+    state: Option<T>,
 }
 
-impl State {
-    pub fn new(request: &hyper::Request<Incoming>, catches: Captures) -> Self {
-        State {
+impl<T: Send + Sync + Clone + 'static> Parts<T> {
+    pub fn new(request: &hyper::Request<Incoming>, state: Option<T>, catches: Captures) -> Self {
+        Parts {
             cookies: CookieJar::new(match request.headers().get(hyper::header::COOKIE) {
                 Some(v) => v.to_str().unwrap().to_string(),
                 None => String::new(),
             }),
             catches,
+            state,
         }
     }
 
     pub fn cookies(&self) -> &CookieJar {
         &self.cookies
     }
+
     pub fn cookies_mut(&mut self) -> &mut CookieJar {
         &mut self.cookies
+    }
+
+    pub fn state(&self) -> Option<&T> {
+        self.state.as_ref()
     }
 }
 
@@ -169,10 +175,10 @@ impl Server {
     ///
     /// async fn handler() {}
     /// ```
-    pub async fn serve<Addr, R>(self, addr: Addr, router: R)
+    pub async fn serve<Addr, R, S: Send + Sync + Clone + 'static>(self, addr: Addr, router: R)
     where
         Addr: IntoSocketAddr,
-        R: IntoRouter,
+        R: IntoRouter<S>,
     {
         let addr = addr.into_socket_addr();
         let listener = TcpListener::bind(addr).await.unwrap();
@@ -262,10 +268,10 @@ impl Builder {
     ///
     /// async fn handler() {}
     /// ```
-    pub async fn serve<Addr, R>(self, addr: Addr, router: R)
+    pub async fn serve<Addr, R, S: Send + Sync + Clone + 'static>(self, addr: Addr, router: R)
     where
         Addr: IntoSocketAddr,
-        R: IntoRouter,
+        R: IntoRouter<S>,
     {
         self.build().serve(addr, router).await;
     }

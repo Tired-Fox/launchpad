@@ -1,17 +1,17 @@
-use http_body_util::{BodyExt, Empty, Full};
+use async_trait::async_trait;
+use http_body_util::{BodyExt, Full};
 pub use hyper::StatusCode;
 use hyper::{
     body::{Bytes, Incoming},
     Response as HttpResponse, Version,
 };
-use std::{collections::HashMap, fs};
-use std::{fmt::Display, path::PathBuf};
-use tela_html::Element;
+use std::collections::HashMap;
+use std::fmt::Display;
 
-use crate::{
-    body::{IntoBody, ParseBody},
-    error::Error,
-};
+use crate::{body::ParseBody, error::Error};
+
+mod into_response;
+pub use into_response::IntoResponse;
 
 /// Response builder
 #[derive(Clone)]
@@ -56,33 +56,26 @@ impl Builder {
     }
 }
 
+#[async_trait]
 impl<'r> ParseBody<'r> for Response {
-    fn text(
-        self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, Error>> + Send>> {
-        Box::pin(async move {
-            String::from_utf8(self.body.collect().await.unwrap().to_bytes().to_vec())
-                .map_err(Error::from)
-        })
+    async fn text(self) -> Result<String, Error> {
+        String::from_utf8(self.body.collect().await.unwrap().to_bytes().to_vec())
+            .map_err(Error::from)
     }
 
-    fn raw(self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<u8>> + Send>> {
-        Box::pin(async move { self.body.collect().await.unwrap().to_bytes().to_vec() })
+    async fn raw(self) -> Vec<u8> {
+        self.body.collect().await.unwrap().to_bytes().to_vec()
     }
 }
 
+#[async_trait]
 impl<'r> ParseBody<'r> for hyper::Response<Incoming> {
-    fn text(
-        self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, Error>> + Send>> {
-        Box::pin(async move {
-            String::from_utf8(self.collect().await.unwrap().to_bytes().to_vec())
-                .map_err(Error::from)
-        })
+    async fn text(self) -> Result<String, Error> {
+        String::from_utf8(self.collect().await.unwrap().to_bytes().to_vec()).map_err(Error::from)
     }
 
-    fn raw(self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<u8>> + Send>> {
-        Box::pin(async move { self.collect().await.unwrap().to_bytes().to_vec() })
+    async fn raw(self) -> Vec<u8> {
+        self.collect().await.unwrap().to_bytes().to_vec()
     }
 }
 
@@ -155,20 +148,6 @@ impl Response {
     }
 }
 
-/// Convert the current object into a `hyper::Response<http_body_utils::Full<hyper::body::Bytes>>`.
-pub trait IntoResponse {
-    fn into_response(self) -> HttpResponse<Full<Bytes>>;
-}
-
-impl IntoResponse for () {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        match hyper::Response::builder().body(Full::new(Bytes::new())) {
-            Ok(v) => v,
-            Err(e) => Error::from(e).into_response(),
-        }
-    }
-}
-
 impl IntoResponse for Builder {
     fn into_response(self) -> HttpResponse<Full<Bytes>> {
         self.clone().body(Bytes::new()).into_response()
@@ -188,130 +167,6 @@ impl IntoResponse for Response {
         match builder.body(self.body) {
             Ok(v) => v,
             Err(e) => Error::from(e).into_response(),
-        }
-    }
-}
-
-impl IntoResponse for &str {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        match hyper::Response::builder()
-            .status(200)
-            .header("Content-Type", "text/plain")
-            .body(Full::new(Bytes::from(self.to_string())))
-        {
-            Ok(v) => v,
-            Err(e) => Error::from(e).into_response(),
-        }
-    }
-}
-
-impl IntoResponse for String {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        match hyper::Response::builder()
-            .status(200)
-            .header("Content-Type", "text/plain")
-            .body(Full::new(Bytes::from(self)))
-        {
-            Ok(v) => v,
-            Err(e) => Error::from(e).into_response(),
-        }
-    }
-}
-
-impl IntoResponse for Vec<u8> {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        match hyper::Response::builder()
-            .status(200)
-            .header("Content-Type", "application/octet-stream")
-            .body(Full::new(Bytes::from(self)))
-        {
-            Ok(v) => v,
-            Err(e) => Error::from(e).into_response(),
-        }
-    }
-}
-
-impl IntoResponse for &[u8] {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        match hyper::Response::builder()
-            .status(200)
-            .header("Content-Type", "application/octet-stream")
-            .body(Full::new(Bytes::from(self.to_vec())))
-        {
-            Ok(v) => v,
-            Err(e) => Error::from(e).into_response(),
-        }
-    }
-}
-
-impl<const SIZE: usize> IntoResponse for [u8; SIZE] {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        match hyper::Response::builder()
-            .status(200)
-            .header("Content-Type", "application/octet-stream")
-            .body(Full::new(Bytes::from(self.to_vec())))
-        {
-            Ok(v) => v,
-            Err(e) => Error::from(e).into_response(),
-        }
-    }
-}
-
-impl<T> IntoResponse for Result<T, Error>
-where
-    T: IntoResponse,
-{
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        match self {
-            Ok(v) => v.into_response(),
-            Err(e) => e.into_response(),
-        }
-    }
-}
-
-impl IntoResponse for Full<Bytes> {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        hyper::Response::builder().status(200).body(self).unwrap()
-    }
-}
-
-impl IntoResponse for Empty<Bytes> {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        hyper::Response::builder()
-            .status(200)
-            .body(Full::new(Bytes::new()))
-            .unwrap()
-    }
-}
-
-impl IntoResponse for Element {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        hyper::Response::builder()
-            .status(200)
-            .header("Content-Type", "text/html")
-            .body(self.into_body())
-            .unwrap()
-    }
-}
-
-impl IntoResponse for serde_json::Value {
-    fn into_response(self) -> HttpResponse<Full<Bytes>> {
-        hyper::Response::builder()
-            .status(200)
-            .header("Content-Type", "application/json")
-            .body(self.into_body())
-            .unwrap()
-    }
-}
-
-impl IntoBody<Full<Bytes>> for PathBuf {
-    fn into_body(self) -> Full<Bytes> {
-        match fs::read(self) {
-            Ok(file) => Full::new(Bytes::from(file)),
-            Err(e) => {
-                eprintln!("Error while serving file: {}", e);
-                Full::default()
-            }
         }
     }
 }

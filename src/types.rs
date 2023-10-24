@@ -6,17 +6,14 @@ pub use query::Query;
 pub mod form {
     use std::{
         fmt::{Debug, Display},
-        future::Future,
-        pin::Pin,
         sync::Arc,
     };
 
+    use async_trait::async_trait;
     use hyper::body::Incoming;
     use serde::Deserialize;
 
-    use crate::{
-        body::ParseBody, prelude::Error, request::FromRequestBody, server::State, Request,
-    };
+    use crate::{body::ParseBody, prelude::Error, request::FromRequest, server::Parts, Request};
 
     /// Represents the Form/Query in the requests body
     pub struct Form<T>(pub T)
@@ -50,12 +47,13 @@ pub mod form {
         }
     }
 
-    impl<T: Deserialize<'static> + Send> FromRequestBody for Form<T> {
-        fn from_request_body(
+    #[async_trait]
+    impl<T: Deserialize<'static> + Send, U: Send + Sync + Clone + 'static> FromRequest<U> for Form<T> {
+        async fn from_request(
             request: hyper::Request<Incoming>,
-            _: Arc<State>,
-        ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
-            Box::pin(async { Request::from(request).form::<T>().await.map(|v| Form(v)) })
+            _: Arc<Parts<U>>,
+        ) -> Result<Self, Error> {
+            Request::from(request).form::<T>().await.map(|v| Form(v))
         }
     }
 }
@@ -63,17 +61,17 @@ pub mod form {
 pub mod query {
     use std::{
         fmt::{Debug, Display},
-        pin::Pin,
         sync::Arc,
     };
 
+    use async_trait::async_trait;
     use hyper::{body::Incoming, StatusCode};
     use serde::Deserialize;
 
     use crate::{
         prelude::Error,
-        request::{FromRequest, FromRequestBody},
-        server::State,
+        request::{FromRequest, FromRequestParts},
+        server::Parts,
     };
 
     /// Represets the uri query
@@ -108,8 +106,13 @@ pub mod query {
         }
     }
 
-    impl<T: Deserialize<'static> + Send> FromRequest for Query<T> {
-        fn from_request(request: &hyper::Request<Incoming>, _: Arc<State>) -> Result<Self, Error> {
+    impl<T: Deserialize<'static> + Send, U: Send + Sync + Clone + 'static> FromRequestParts<U>
+        for Query<T>
+    {
+        fn from_request_parts(
+            request: &hyper::Request<Incoming>,
+            _: Arc<Parts<U>>,
+        ) -> Result<Self, Error> {
             let query = match request.uri().query() {
                 Some(query) => query,
                 None => {
@@ -137,12 +140,13 @@ pub mod query {
         }
     }
 
-    impl<T: Deserialize<'static> + Send> FromRequestBody for Query<T> {
-        fn from_request_body(
+    #[async_trait]
+    impl<T: Deserialize<'static> + Send, U: Send + Sync + Clone + 'static> FromRequest<U> for Query<T> {
+        async fn from_request(
             request: hyper::Request<Incoming>,
-            _state: Arc<State>,
-        ) -> Pin<Box<dyn std::future::Future<Output = Result<Self, Error>> + Send>> {
-            Box::pin(async move { Query::<T>::from_request(&request, _state) })
+            parts: Arc<Parts<U>>,
+        ) -> Result<Self, Error> {
+            Query::<T>::from_request_parts(&request, parts)
         }
     }
 }
@@ -251,12 +255,11 @@ pub mod html {
 }
 
 pub mod json {
+    use async_trait::async_trait;
     use serde::{Deserialize, Serialize};
     pub use serde_json::Value;
     use std::{
         fmt::{Debug, Display},
-        future::Future,
-        pin::Pin,
         sync::Arc,
     };
 
@@ -264,9 +267,9 @@ pub mod json {
     use crate::{
         body::{IntoBody, ParseBody},
         error::Error,
-        request::FromRequestBody,
+        request::FromRequest,
         response::IntoResponse,
-        server::State,
+        server::Parts,
         Request,
     };
     use http_body_util::Full;
@@ -350,12 +353,15 @@ pub mod json {
         }
     }
 
-    impl<T: Serialize + Deserialize<'static> + Send> FromRequestBody for Json<T> {
-        fn from_request_body(
+    #[async_trait]
+    impl<T: Serialize + Deserialize<'static> + Send, U: Send + Sync + Clone + 'static>
+        FromRequest<U> for Json<T>
+    {
+        async fn from_request(
             request: hyper::Request<Incoming>,
-            _: Arc<State>,
-        ) -> Pin<Box<dyn Future<Output = Result<Self, Error>> + Send>> {
-            Box::pin(async { Request::from(request).json::<T>().await.map(|v| Json(v)) })
+            _: Arc<Parts<U>>,
+        ) -> Result<Self, Error> {
+            Request::from(request).json::<T>().await.map(|v| Json(v))
         }
     }
 }

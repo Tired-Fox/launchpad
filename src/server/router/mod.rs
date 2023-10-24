@@ -4,8 +4,7 @@ pub mod route;
 pub use route::*;
 
 use std::{
-    collections::HashMap, convert::Infallible, fmt::Debug, future::Future, path::PathBuf, pin::Pin,
-    sync::Arc,
+    collections::HashMap, convert::Infallible, future::Future, path::PathBuf, pin::Pin, sync::Arc,
 };
 
 use http_body_util::Full;
@@ -23,12 +22,13 @@ use handler::Handler;
 use self::route::{BoxedHandler, Endpoint, IntoStaticPath, Route, Routes};
 
 /// Router builder struct.
-pub struct Builder {
-    routes: Routes,
+pub struct Builder<S: Send + Sync + Clone + 'static = ()> {
+    routes: Routes<S>,
     assets: HashMap<String, PathBuf>,
+    state: Option<S>,
 }
 
-impl Builder {
+impl<T: Send + Sync + Clone + 'static> Builder<T> {
     /// Define a route to be handled by the router.
     ///
     /// The route handler is a collection of methods that have any number of arguments,
@@ -53,7 +53,7 @@ impl Builder {
     ///         .route("/", get(get_handler).post(post_handler).any(any_handler))
     /// }
     /// ```
-    pub fn route(mut self, path: &str, handler: Route) -> Self {
+    pub fn route(mut self, path: &str, handler: Route<T>) -> Self {
         self.routes.insert(path.to_string(), handler);
         self
     }
@@ -90,9 +90,9 @@ impl Builder {
     ///
     /// This handler is only called if a handler for any other defined route is not found. The
     /// handler passed in can be thought of as the last resort handler for a `404`.
-    pub fn any<H, F>(self, handler: H) -> Router
+    pub fn any<H, F>(self, handler: H) -> Router<T>
     where
-        H: Handler<F>,
+        H: Handler<F, T>,
         F: Send + Sync + 'static,
     {
         Router {
@@ -100,15 +100,22 @@ impl Builder {
             assets: self.assets.into(),
             routes: Arc::new(Mutex::new(self.routes)),
             any: Some(Endpoint::new(BoxedHandler::from_handler(handler))),
+            state: self.state,
         }
     }
 
-    pub fn build(self) -> Router {
+    pub fn with_state(mut self, state: T) -> Self {
+        self.state = Some(state);
+        self
+    }
+
+    pub fn build(self) -> Router<T> {
         Router {
             handler: None,
             assets: self.assets.into(),
             routes: Arc::new(Mutex::new(self.routes)),
             any: None,
+            state: self.state,
         }
     }
 }
@@ -116,23 +123,25 @@ impl Builder {
 /// The heart of tela; the router takes each request and attempts to resolve the request to the
 /// appropriate handler or file.
 #[derive(Clone)]
-pub struct Router {
-    pub handler: Option<Endpoint>,
+pub struct Router<S: Send + Sync + Clone + 'static = ()> {
+    pub handler: Option<Endpoint<S>>,
     pub assets: Arc<HashMap<String, PathBuf>>,
-    pub routes: Arc<Mutex<Routes>>,
-    pub any: Option<Endpoint>,
+    pub routes: Arc<Mutex<Routes<S>>>,
+    pub any: Option<Endpoint<S>>,
+    pub state: Option<S>,
 }
 
-impl Router {
+impl<S: Send + Sync + Clone + 'static> Router<S> {
     pub async fn handler(
         request: hyper::Request<Incoming>,
-        routes: Arc<Mutex<Routes>>,
+        routes: Arc<Mutex<Routes<S>>>,
         assets: Arc<HashMap<String, PathBuf>>,
-        handler: Option<Endpoint>,
-        any: Option<Endpoint>,
+        handler: Option<Endpoint<S>>,
+        state: Option<S>,
+        any: Option<Endpoint<S>>,
     ) -> Result<hyper::Response<Full<Bytes>>, Infallible> {
         if let Some(Endpoint(handler)) = handler {
-            return Ok(handler.call(request, Captures::new()).await);
+            return Ok(handler.call(request, state, Captures::new()).await);
         }
 
         // Check for matching static asset path
@@ -173,28 +182,30 @@ impl Router {
             }
         };
 
-        Ok(endpoint.0.call(request, catches).await)
+        Ok(endpoint.0.call(request, state, catches).await)
     }
 
     /// Create a new router which can have builder methods chained.
     ///
     /// Use `route`, `assets`, and `any` to define different handlers for the router.
-    pub fn builder() -> Builder {
+    pub fn builder() -> Builder<S> {
         Builder {
             routes: Routes::new(),
             assets: HashMap::new(),
+            state: None,
         }
     }
 }
 
-impl Debug for Router {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Router({:?})", self.routes)
-    }
-}
+// TODO: Revisit
+// impl<S: Send + Sync + Clone + 'static> Debug for Router<S> {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "Router({:?})", self.routes)
+//     }
+// }
 
 // Allow Router itself to handle hyper requests
-impl Service<hyper::Request<Incoming>> for Router {
+impl<S: Send + Sync + Clone + 'static> Service<hyper::Request<Incoming>> for Router<S> {
     type Response = hyper::Response<Full<Bytes>>;
     type Error = Infallible;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -205,38 +216,40 @@ impl Service<hyper::Request<Incoming>> for Router {
             self.routes.clone(),
             self.assets.clone(),
             self.handler.clone(),
+            self.state.clone(),
             self.any.clone(),
         ))
     }
 }
 
 /// Convert object into a `tela::server::Router` object
-pub trait IntoRouter {
-    fn into_router(self) -> Router;
+pub trait IntoRouter<S: Send + Sync + Clone + 'static = ()> {
+    fn into_router(self) -> Router<S>;
 }
 
-impl<H> IntoRouter for H
+impl<H> IntoRouter<()> for H
 where
-    H: Handler + Send + Sync,
+    H: Handler<(), ()> + Send + Sync,
 {
-    fn into_router(self) -> Router {
+    fn into_router(self) -> Router<()> {
         Router {
             handler: Some(Endpoint(Arc::new(BoxedHandler::from_handler(self)))),
             assets: Arc::new(HashMap::new()),
             routes: Arc::new(Mutex::new(Routes::new())),
             any: None,
+            state: None,
         }
     }
 }
 
-impl IntoRouter for Router {
-    fn into_router(self) -> Router {
+impl<S: Send + Sync + Clone + 'static> IntoRouter<S> for Router<S> {
+    fn into_router(self) -> Router<S> {
         self
     }
 }
 
-impl IntoRouter for Builder {
-    fn into_router(self) -> Router {
+impl<S: Send + Sync + Clone + 'static> IntoRouter<S> for Builder<S> {
+    fn into_router(self) -> Router<S> {
         self.build()
     }
 }

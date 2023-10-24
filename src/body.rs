@@ -1,5 +1,6 @@
-use std::{convert::Infallible, future::Future, pin::Pin};
+use std::{convert::Infallible, path::PathBuf};
 
+use async_trait::async_trait;
 use http_body_util::{Empty, Full};
 use hyper::{
     body::{Body, Bytes},
@@ -15,79 +16,74 @@ use crate::{error::Error, Html};
 ///
 /// The only required method to implement is `text` as all other types
 /// are parsed from the result of that type
+#[async_trait]
 pub trait ParseBody<'r> {
     /// Parse the body as a form/query string.
-    fn form<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
+    async fn form<O>(self) -> Result<O, Error>
     where
         O: Deserialize<'r>,
         Self: Sized + 'static + Send,
     {
-        Box::pin(async move {
-            let content = self.text().await.unwrap();
-            serde_qs::from_str(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
-                Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
-                    #[cfg(debug_assertions)]
-                    {
-                        Html(content.to_string())
-                    }
-                    #[cfg(not(debug_assertions))]
-                    {
-                        Html(String::new())
-                    }
-                }))
-            })
+        let content = self.text().await.unwrap();
+        serde_qs::from_str(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
+            Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
+                #[cfg(debug_assertions)]
+                {
+                    Html(content.to_string())
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    Html(String::new())
+                }
+            }))
         })
     }
 
     /// Parse the body as a json string.
-    fn json<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
+    async fn json<O>(self) -> Result<O, Error>
     where
         O: Deserialize<'r>,
         Self: Sized + 'static + Send,
     {
-        Box::pin(async move {
-            let content = self.text().await.unwrap();
-            serde_json::from_str(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
-                Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
-                    #[cfg(debug_assertions)]
-                    {
-                        Html(content.to_string())
-                    }
-                    #[cfg(not(debug_assertions))]
-                    {
-                        Html(String::new())
-                    }
-                }))
-            })
+        let content = self.text().await.unwrap();
+        serde_json::from_str(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
+            Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
+                #[cfg(debug_assertions)]
+                {
+                    Html(content.to_string())
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    Html(String::new())
+                }
+            }))
         })
     }
 
     /// Get the body as a raw String.
-    fn text(self) -> Pin<Box<dyn Future<Output = Result<String, Error>> + Send>>;
+    async fn text(self) -> Result<String, Error>;
 
     /// Get the body as raw bytes.
-    fn raw(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>>;
+    async fn raw(self) -> Vec<u8>;
 
     /// Parse the body as a top level primitive (basic) type.
-    fn base<O>(self) -> Pin<Box<dyn Future<Output = Result<O, Error>> + Send>>
+    async fn base<O>(self) -> Result<O, Error>
     where
         O: Deserialize<'r>,
         Self: Sized + 'static + Send,
     {
-        Box::pin(async move {
-            let content = self.text().await.unwrap();
-            serde_plain::from_str::<O>(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
-                Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
-                    #[cfg(debug_assertions)]
-                    {
-                        Html(content.to_string())
-                    }
-                    #[cfg(not(debug_assertions))]
-                    {
-                        Html(String::new())
-                    }
-                }))
-            })
+        let content = self.text().await.unwrap();
+        serde_plain::from_str::<O>(Box::leak(content.clone().into_boxed_str())).map_err(|e| {
+            Error::from((StatusCode::INTERNAL_SERVER_ERROR, e, {
+                #[cfg(debug_assertions)]
+                {
+                    Html(content.to_string())
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    Html(String::new())
+                }
+            }))
         })
     }
 }
@@ -137,5 +133,17 @@ impl IntoBody<Full<Bytes>> for Value {
 impl IntoBody<Full<Bytes>> for Element {
     fn into_body(self) -> Full<Bytes> {
         Full::new(Bytes::from(self.to_string()))
+    }
+}
+
+impl IntoBody<Full<Bytes>> for PathBuf {
+    fn into_body(self) -> Full<Bytes> {
+        match std::fs::read(self) {
+            Ok(file) => Full::new(Bytes::from(file)),
+            Err(e) => {
+                eprintln!("Error while serving file: {}", e);
+                Full::default()
+            }
+        }
     }
 }
