@@ -15,10 +15,9 @@
     let slug: String = captures.get("slug");
   }
   ```
-- [ ] State that is set up by the user and passed down to handlers
+- [x] State that is set up by the user and passed down to handlers
   - This allows for things like template engines to be set up and then
   implemented in the users state
-- [ ] Path groupings for routes so they may be defined elsewhere.
 - [ ] Add service/Tower layer support per handler and per route
 - [ ] Sensitive data redaction for logs
 - [ ] Refine features and make them rich, fast, and easy to use

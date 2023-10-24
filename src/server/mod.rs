@@ -102,13 +102,13 @@ impl IntoSocketAddr for Socket {
     }
 }
 
-pub struct Parts<T: Send + Sync + Clone + 'static> {
+pub struct Parts<T> {
     cookies: CookieJar,
     catches: Captures,
     state: Option<T>,
 }
 
-impl<T: Send + Sync + Clone + 'static> Parts<T> {
+impl<T> Parts<T> {
     pub fn new(request: &hyper::Request<Incoming>, state: Option<T>, catches: Captures) -> Self {
         Parts {
             cookies: CookieJar::new(match request.headers().get(hyper::header::COOKIE) {

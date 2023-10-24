@@ -104,7 +104,7 @@ impl<T: Send + Sync + Clone + 'static> Builder<T> {
         }
     }
 
-    pub fn with_state(mut self, state: T) -> Self {
+    pub fn state(mut self, state: T) -> Self {
         self.state = Some(state);
         self
     }

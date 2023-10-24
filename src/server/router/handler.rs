@@ -1,7 +1,10 @@
 use std::{future::Future, sync::Arc};
 
 use http_body_util::Full;
-use hyper::body::{Bytes, Incoming};
+use hyper::{
+    body::{Bytes, Incoming},
+    service::Service,
+};
 
 use crate::{
     prelude::IntoResponse,
@@ -9,14 +12,14 @@ use crate::{
     server::Parts,
 };
 
-use super::route::Captures;
+use super::{route::Captures, Router};
 use async_trait::async_trait;
 
 /// Base trait that allows object and methods to be used as a handler.
 ///
 /// This trait is responsible for calling and driving handlers processing a request.
 #[async_trait]
-pub trait Handler<IN, S: Send + Sync + Clone + 'static = ()>: Send + Sync + 'static {
+pub trait Handler<IN, S>: Send + Sync + 'static {
     async fn handle(
         &self,
         request: hyper::Request<Incoming>,
@@ -26,7 +29,7 @@ pub trait Handler<IN, S: Send + Sync + Clone + 'static = ()>: Send + Sync + 'sta
 }
 
 #[async_trait]
-impl<F, Fut, Res, S: Send + Sync + 'static> Handler<(), S> for F
+impl<F, Fut, Res, S> Handler<(), S> for F
 where
     F: FnOnce() -> Fut + Clone + Sync + Send + 'static,
     Fut: Future<Output = Res> + Send + 'static,
@@ -56,7 +59,7 @@ macro_rules! handlers {
                 F: FnOnce($($type,)* $last) -> Fut + Clone + Sync + Send + 'static,
                 Fut: Future<Output = Res> + Send + 'static,
                 Res: IntoResponse,
-                S: Send + Sync + Clone + 'static,
+                S: Send + Sync + 'static,
                 $(
                     $type: FromRequestParts<S>,
                 )*

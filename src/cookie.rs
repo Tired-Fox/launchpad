@@ -335,7 +335,7 @@ impl CookieJar {
     }
 }
 
-impl<T: Send + Sync + Clone + 'static> FromRequestParts<T> for CookieJar {
+impl<T> FromRequestParts<T> for CookieJar {
     fn from_request_parts(
         _request: &hyper::Request<Incoming>,
         parts: Arc<Parts<T>>,
@@ -345,7 +345,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequestParts<T> for CookieJar {
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for CookieJar {
+impl<T: Send + Sync + 'static> FromRequest<T> for CookieJar {
     async fn from_request(
         _request: hyper::Request<Incoming>,
         parts: Arc<Parts<T>>,

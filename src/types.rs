@@ -48,7 +48,7 @@ pub mod form {
     }
 
     #[async_trait]
-    impl<T: Deserialize<'static> + Send, U: Send + Sync + Clone + 'static> FromRequest<U> for Form<T> {
+    impl<T: Deserialize<'static> + Send, U: Send + Sync + 'static> FromRequest<U> for Form<T> {
         async fn from_request(
             request: hyper::Request<Incoming>,
             _: Arc<Parts<U>>,
@@ -106,9 +106,7 @@ pub mod query {
         }
     }
 
-    impl<T: Deserialize<'static> + Send, U: Send + Sync + Clone + 'static> FromRequestParts<U>
-        for Query<T>
-    {
+    impl<T: Deserialize<'static> + Send, U> FromRequestParts<U> for Query<T> {
         fn from_request_parts(
             request: &hyper::Request<Incoming>,
             _: Arc<Parts<U>>,
@@ -141,7 +139,7 @@ pub mod query {
     }
 
     #[async_trait]
-    impl<T: Deserialize<'static> + Send, U: Send + Sync + Clone + 'static> FromRequest<U> for Query<T> {
+    impl<T: Deserialize<'static> + Send, U: Send + Sync + 'static> FromRequest<U> for Query<T> {
         async fn from_request(
             request: hyper::Request<Incoming>,
             parts: Arc<Parts<U>>,
@@ -354,8 +352,8 @@ pub mod json {
     }
 
     #[async_trait]
-    impl<T: Serialize + Deserialize<'static> + Send, U: Send + Sync + Clone + 'static>
-        FromRequest<U> for Json<T>
+    impl<T: Serialize + Deserialize<'static> + Send, U: Send + Sync + 'static> FromRequest<U>
+        for Json<T>
     {
         async fn from_request(
             request: hyper::Request<Incoming>,

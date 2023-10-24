@@ -13,7 +13,7 @@ use crate::{
     server::Parts,
 };
 
-use super::handler::Handler;
+use super::{handler::Handler, Router};
 
 lazy_static::lazy_static! {
     static ref MULTI_SLASH: regex::Regex = regex::Regex::new(r#"/+"#).unwrap();
@@ -105,7 +105,7 @@ impl Captures {
     }
 }
 
-impl<T: Send + Sync + Clone + 'static> FromRequestParts<T> for Captures {
+impl<T> FromRequestParts<T> for Captures {
     fn from_request_parts(
         _request: &hyper::Request<Incoming>,
         parts: Arc<Parts<T>>,
@@ -115,7 +115,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequestParts<T> for Captures {
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Captures {
+impl<T: Send + Sync + 'static> FromRequest<T> for Captures {
     async fn from_request(
         _request: hyper::Request<Incoming>,
         parts: Arc<Parts<T>>,

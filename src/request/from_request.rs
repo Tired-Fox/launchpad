@@ -5,13 +5,12 @@ use hyper::{body::Incoming, Method, StatusCode, Uri, Version};
 
 use crate::{body::ParseBody, prelude::Error, server::Parts, Request};
 
-use super::{Body, Head, Headers, State, ToState};
+use super::{Body, FromStateRef, Head, Headers, State};
 
 #[async_trait]
 pub trait FromRequest<S>
 where
     Self: Sized + Send,
-    S: Send + Sync + Clone + 'static,
 {
     async fn from_request(
         request: hyper::Request<Incoming>,
@@ -22,8 +21,8 @@ where
 #[async_trait]
 impl<T, U> FromRequest<U> for Option<T>
 where
-    U: Send + Sync + Clone + 'static,
     T: FromRequest<U>,
+    U: Send + Sync + 'static,
 {
     async fn from_request(
         request: hyper::Request<Incoming>,
@@ -34,7 +33,7 @@ where
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Body {
+impl<T: Send + Sync + 'static> FromRequest<T> for Body {
     async fn from_request(
         request: hyper::Request<Incoming>,
         _parts: Arc<Parts<T>>,
@@ -44,7 +43,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Body {
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Request {
+impl<T: Send + Sync + 'static> FromRequest<T> for Request {
     async fn from_request(
         request: hyper::Request<Incoming>,
         _parts: Arc<Parts<T>>,
@@ -54,7 +53,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Request {
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for String {
+impl<T: Send + Sync + 'static> FromRequest<T> for String {
     async fn from_request(
         request: hyper::Request<Incoming>,
         _parts: Arc<Parts<T>>,
@@ -64,7 +63,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequest<T> for String {
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Version {
+impl<T: Send + Sync + 'static> FromRequest<T> for Version {
     async fn from_request(
         request: hyper::Request<Incoming>,
         _parts: Arc<Parts<T>>,
@@ -74,7 +73,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Version {
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Head {
+impl<T: Send + Sync + 'static> FromRequest<T> for Head {
     async fn from_request(
         request: hyper::Request<Incoming>,
         _parts: Arc<Parts<T>>,
@@ -84,7 +83,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Head {
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Method {
+impl<T: Send + Sync + 'static> FromRequest<T> for Method {
     async fn from_request(
         request: hyper::Request<Incoming>,
         _parts: Arc<Parts<T>>,
@@ -94,7 +93,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Method {
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for HashMap<String, String> {
+impl<T: Send + Sync + 'static> FromRequest<T> for HashMap<String, String> {
     async fn from_request(
         request: hyper::Request<Incoming>,
         _parts: Arc<Parts<T>>,
@@ -108,7 +107,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequest<T> for HashMap<String, String
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Headers {
+impl<T: Send + Sync + 'static> FromRequest<T> for Headers {
     async fn from_request(
         request: hyper::Request<Incoming>,
         _parts: Arc<Parts<T>>,
@@ -118,7 +117,7 @@ impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Headers {
 }
 
 #[async_trait]
-impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Uri {
+impl<T: Send + Sync + 'static> FromRequest<T> for Uri {
     async fn from_request(
         request: hyper::Request<Incoming>,
         _parts: Arc<Parts<T>>,
@@ -128,16 +127,16 @@ impl<T: Send + Sync + Clone + 'static> FromRequest<T> for Uri {
 }
 
 #[async_trait]
-impl<T> FromRequest<T> for State<T>
+impl<T: Send + Sync + 'static> FromRequest<T> for State<T>
 where
-    T: Send + Sync + Clone + 'static,
+    T: FromStateRef<T> + Sync + Clone + Send,
 {
     async fn from_request(
         _request: hyper::Request<Incoming>,
         parts: Arc<Parts<T>>,
     ) -> Result<Self, Error> {
         match parts.state() {
-            Some(state) => Ok(state.to_state()),
+            Some(state) => Ok(T::from_state_ref(state)),
             None => Err(Error::from((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failied to parse application state",

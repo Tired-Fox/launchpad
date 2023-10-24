@@ -29,7 +29,7 @@ async fn main() {
             Socket::Local(3000),
             Router::builder()
                 .route("/blog/:...subpage/defs/:page", get(handler))
-                .with_state(state),
+                .state(state),
         )
         .await;
 }

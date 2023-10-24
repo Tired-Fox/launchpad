@@ -240,16 +240,16 @@ impl<'r> Request {
 }
 
 #[derive(Clone)]
-pub struct State<T: Clone>(pub T);
-pub trait ToState
+pub struct State<T>(pub T);
+pub trait FromStateRef<T: Clone>
 where
-    Self: Clone,
+    Self: Sized,
 {
-    fn to_state(&self) -> State<Self>;
+    fn from_state_ref(state: &T) -> State<Self>;
 }
 
-impl<T: Clone> ToState for T {
-    fn to_state(&self) -> State<Self> {
-        State(self.clone())
+impl<T: Clone> FromStateRef<T> for T {
+    fn from_state_ref(state: &T) -> State<Self> {
+        State(state.clone())
     }
 }
