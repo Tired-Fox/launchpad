@@ -12,6 +12,10 @@ pub mod router;
 pub use hyper::http::StatusCode;
 pub use router::Router;
 
+pub mod methods {
+    pub use crate::server::router::{connect, delete, get, head, options, patch, post, put, trace};
+}
+
 /// Represents a local or network socket.
 pub enum Socket {
     Local(u16),

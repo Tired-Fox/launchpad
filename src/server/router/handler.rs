@@ -16,7 +16,7 @@ use async_trait::async_trait;
 ///
 /// This trait is responsible for calling and driving handlers processing a request.
 #[async_trait]
-pub trait Handler<IN, S>: Send + Sync + 'static {
+pub trait Handler<IN, S: Send + Sync + 'static = ()>: Send + Sync + 'static {
     async fn handle(
         &self,
         request: hyper::Request<Incoming>,
@@ -26,18 +26,17 @@ pub trait Handler<IN, S>: Send + Sync + 'static {
 }
 
 #[async_trait]
-impl<F, Fut, Res, S> Handler<(), S> for F
+impl<F, Fut, Res> Handler<(), ()> for F
 where
     F: FnOnce() -> Fut + Clone + Sync + Send + 'static,
     Fut: Future<Output = Res> + Send + 'static,
     Res: IntoResponse,
-    S: Send + Sync + Clone + 'static,
 {
     async fn handle(
         &self,
-        _: hyper::Request<Incoming>,
-        _: Option<S>,
-        _: Captures,
+        _request: hyper::Request<Incoming>,
+        _state: Option<()>,
+        _captures: Captures,
     ) -> hyper::Response<Full<Bytes>> {
         let handler = self.clone();
         handler().await.into_response()

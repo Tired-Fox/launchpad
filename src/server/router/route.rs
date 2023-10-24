@@ -13,7 +13,7 @@ use crate::{
     server::Parts,
 };
 
-use super::{handler::Handler};
+use super::handler::Handler;
 
 lazy_static::lazy_static! {
     static ref MULTI_SLASH: regex::Regex = regex::Regex::new(r#"/+"#).unwrap();
@@ -264,12 +264,12 @@ impl RoutePath {
 
 /// Wrapper around a route handler pointer.
 #[derive(Clone)]
-pub struct BoxedHandler<S: Send + Sync + Clone + 'static, I>(Arc<dyn Handler<I, S>>);
+pub struct BoxedHandler<I, S: Send + Sync + 'static = ()>(Arc<dyn Handler<I, S>>);
 
-impl<S, I> BoxedHandler<S, I>
+impl<I, S> BoxedHandler<I, S>
 where
     I: Send + Sync + 'static,
-    S: Send + Sync + Clone + 'static,
+    S: Send + Sync + 'static,
 {
     pub fn from_handler<H>(handler: H) -> Self
     where
@@ -290,7 +290,7 @@ where
 
 /// Allows the dynamic route handler pointer to be called.
 #[async_trait]
-pub trait ErasedHandler<S: Send + Sync + Clone + 'static>: Send + Sync + 'static {
+pub trait ErasedHandler<S: Send + Sync + 'static>: Send + Sync + 'static {
     async fn call(
         &self,
         request: hyper::Request<Incoming>,
@@ -300,10 +300,10 @@ pub trait ErasedHandler<S: Send + Sync + Clone + 'static>: Send + Sync + 'static
 }
 
 #[async_trait]
-impl<I, S> ErasedHandler<S> for BoxedHandler<S, I>
+impl<I, S> ErasedHandler<S> for BoxedHandler<I, S>
 where
     I: Send + Sync + 'static,
-    S: Send + Sync + Clone + 'static,
+    S: Send + Sync + 'static,
 {
     async fn call(
         &self,
@@ -317,17 +317,17 @@ where
 
 /// Wrapper around a route handler.
 #[derive(Clone)]
-pub struct Endpoint<S: Send + Sync + Clone + 'static>(pub Arc<dyn ErasedHandler<S>>);
+pub struct Endpoint<S: Send + Sync + 'static>(pub Arc<dyn ErasedHandler<S>>);
 impl<S> Endpoint<S>
 where
-    S: Send + Sync + Clone + 'static,
+    S: Send + Sync + 'static,
 {
     pub fn new<E: ErasedHandler<S>>(handler: E) -> Self {
         Endpoint(Arc::new(handler))
     }
 }
 
-impl<S: Send + Sync + Clone + 'static> Debug for Endpoint<S> {
+impl<S: Send + Sync + 'static> Debug for Endpoint<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Endpoint",)
     }
@@ -335,11 +335,11 @@ impl<S: Send + Sync + Clone + 'static> Debug for Endpoint<S> {
 
 /// A wrapper that holds handlers for a given route.
 #[derive(Debug)]
-pub struct Route<S: Send + Sync + Clone + 'static> {
+pub struct Route<S: Send + Sync + 'static> {
     callbacks: RouteMethods<S>,
 }
 
-impl<S: Send + Sync + Clone + 'static> Route<S> {
+impl<S: Send + Sync + 'static> Route<S> {
     fn replace_or_not(endpoint: &mut Option<Endpoint<S>>, new: Option<Endpoint<S>>) {
         if let Some(_) = &new {
             *endpoint = new
@@ -349,12 +349,12 @@ impl<S: Send + Sync + Clone + 'static> Route<S> {
 
 /// A wrapper arround a mapping routes to their handlers.
 #[derive(Debug)]
-pub struct Routes<S: Send + Sync + Clone + 'static> {
+pub struct Routes<S: Send + Sync + 'static> {
     paths: Vec<(RoutePath, Route<S>)>,
     cache: HashMap<String, (usize, Captures)>,
 }
 
-impl<S: Send + Sync + Clone + 'static> Routes<S> {
+impl<S: Send + Sync + 'static> Routes<S> {
     pub fn insert(&mut self, key: String, value: Route<S>) {
         match self
             .paths
@@ -411,7 +411,7 @@ impl<S: Send + Sync + Clone + 'static> Routes<S> {
 }
 
 #[doc = "Create a new route with the handler that handles any request method"]
-pub fn any<H, T, S: Send + Sync + Clone + 'static>(handler: H) -> Route<S>
+pub fn any<H, T, S: Send + Sync + 'static>(handler: H) -> Route<S>
 where
     H: Handler<T, S>,
     T: Send + Sync + 'static,
@@ -433,7 +433,7 @@ macro_rules! make_methods {
                 where
                     H: Handler<T, S>,
                     T: Send + Sync + 'static,
-                    S: Send + Sync + Clone + 'static,
+                    S: Send + Sync + 'static,
                 {
                     crate::server::router::route::Route {
                         callbacks: crate::server::router::route::RouteMethods {
@@ -445,7 +445,7 @@ macro_rules! make_methods {
             )*
         }
         paste::paste! {
-            impl<S: Send + Sync + Clone + 'static> Route<S> {
+            impl<S: Send + Sync + 'static> Route<S> {
                 /// Merge duplicate route paths together. New handlers override old handlers.
                 fn merge(&mut self, new: Route<S>) {
                     $(Route::replace_or_not(&mut self.callbacks.[<$method:lower>], new.callbacks.[<$method:lower>]);)*
@@ -491,12 +491,12 @@ macro_rules! make_methods {
         paste::paste! {
             /// All method handlers for a given route.
             #[derive(Debug)]
-            pub struct RouteMethods<S: Send + Sync + Clone + 'static> {
+            pub struct RouteMethods<S: Send + Sync + 'static> {
                 $([<$method:lower>]: Option<Endpoint<S>>,)*
                 any: Option<Endpoint<S>>,
             }
 
-            impl<S: Send + Sync + Clone + 'static> Default for RouteMethods<S> {
+            impl<S: Send + Sync + 'static> Default for RouteMethods<S> {
                 fn default() -> Self {
                     RouteMethods {
                         any: None,
