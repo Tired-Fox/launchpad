@@ -1,18 +1,15 @@
 use std::{future::Future, sync::Arc};
 
 use http_body_util::Full;
-use hyper::{
-    body::{Bytes, Incoming},
-    service::Service,
-};
+use hyper::body::{Bytes, Incoming};
 
 use crate::{
     prelude::IntoResponse,
-    request::{FromRequest, FromRequestParts},
+    request::{FromRequestOrParts, FromRequestParts},
     server::Parts,
 };
 
-use super::{route::Captures, Router};
+use super::route::Captures;
 use async_trait::async_trait;
 
 /// Base trait that allows object and methods to be used as a handler.
@@ -54,7 +51,7 @@ macro_rules! handlers {
     ($($type: ident),* | $last: ident) => {
         paste::paste!{
             #[async_trait]
-            impl<F, Fut, Res, S, $($type,)* $last> Handler<($($type,)* $last,), S> for F
+            impl<F, Fut, Res, S, O, $($type,)* $last> Handler<(O, $($type,)* $last,), S> for F
             where
                 F: FnOnce($($type,)* $last) -> Fut + Clone + Sync + Send + 'static,
                 Fut: Future<Output = Res> + Send + 'static,
@@ -63,7 +60,7 @@ macro_rules! handlers {
                 $(
                     $type: FromRequestParts<S>,
                 )*
-                $last: FromRequest<S>,
+                $last: FromRequestOrParts<O, S>,
             {
                 async fn handle(
                     &self,
@@ -83,7 +80,7 @@ macro_rules! handlers {
                         )*
 
                         let state_clone = state.clone();
-                        let [<$last:lower>] = match $last::from_request(request, state_clone).await {
+                        let [<$last:lower>] = match $last::from_request_or_parts(request, state_clone).await {
                             Ok(value) => value,
                             Err(err) => return err.into_response()
                         };
@@ -109,4 +106,13 @@ handlers! {
     [T1,T2,T3|T4];
     [T1,T2,T3,T4|T5];
     [T1,T2,T3,T4,T5|T6];
+    [T1,T2,T3,T4,T5,T6|T7];
+    [T1,T2,T3,T4,T5,T6,T7|T8];
+    [T1,T2,T3,T4,T5,T6,T7,T8|T9];
+    [T1,T2,T3,T4,T5,T6,T7,T8,T9|T10];
+    [T1,T2,T3,T4,T5,T6,T7,T8,T9,T10|T11];
+    [T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,T11|T12];
+    [T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,T11,T12|T13];
+    [T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,T11,T12,T13|T14];
+    [T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,T11,T12,T13,T14|T15];
 }

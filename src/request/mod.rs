@@ -19,9 +19,14 @@ pub use hyper::{Method, Uri, Version};
 mod from_request;
 mod from_request_parts;
 pub use from_request::FromRequest;
+pub(crate) use from_request::FromRequestOrParts;
 pub use from_request_parts::FromRequestParts;
 
 pub type Headers = HeaderMap<HeaderValue>;
+
+// These structs are for typeing
+pub struct FR;
+pub struct FRP;
 
 /// Request builder
 pub struct Builder {

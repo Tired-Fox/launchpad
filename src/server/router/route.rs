@@ -13,7 +13,7 @@ use crate::{
     server::Parts,
 };
 
-use super::{handler::Handler, Router};
+use super::{handler::Handler};
 
 lazy_static::lazy_static! {
     static ref MULTI_SLASH: regex::Regex = regex::Regex::new(r#"/+"#).unwrap();
