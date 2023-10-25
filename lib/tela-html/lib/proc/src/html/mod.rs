@@ -560,7 +560,7 @@ impl Parser {
                         );
                     }
                     lbinding = Some((&attr[4..]).to_string());
-                } else if attr.as_str() == "await" {
+                } else if attr.as_str() == "async" {
                     will_await = quote!(.await);
                 } else if attr.as_str() == "enum" {
                     if let Attribute::Exists = value.value() {

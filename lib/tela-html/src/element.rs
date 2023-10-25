@@ -3,7 +3,7 @@ use std::{
     fmt::{Debug, Display},
 };
 
-use crate::{escape, ToAttrValue};
+use crate::ToAttrValue;
 
 macro_rules! or_new {
     (($($first: tt)*) $(=> ($($condition: tt)*))*, $($result: tt)*) => {
@@ -70,18 +70,19 @@ pub trait IntoChildren<T = ()> {
     fn into_children(&self) -> Option<Vec<Element>>;
 }
 
-impl<F> IntoChildren<Box<dyn FnOnce() -> Element>> for F
+impl<F, I, R> IntoChildren<(Box<dyn FnOnce() -> I>, R)> for F
 where
-    F: FnOnce() -> Element + Clone,
+    F: FnOnce() -> I + Clone,
+    I: IntoChildren<R>,
 {
     fn into_children(&self) -> Option<Vec<Element>> {
-        Some(vec![(self.clone())()])
+        (self.clone())().into_children()
     }
 }
 
 impl<T: Display> IntoChildren<Box<dyn Display>> for T {
     fn into_children(&self) -> Option<Vec<Element>> {
-        Some(Vec::from([Element::Text(escape(self.to_string()))]))
+        Some(Vec::from([Element::Text(self.to_string())]))
     }
 }
 

@@ -99,7 +99,7 @@ where
             Some(state) => Ok(T::from_state_ref(state)),
             None => Err(Error::from((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to parse application state",
+                "Failed to parse application state: No state found",
             ))),
         }
     }
