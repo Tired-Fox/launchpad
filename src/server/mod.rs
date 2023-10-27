@@ -1,5 +1,3 @@
-//! https://hyper.rs/guides/1/server/hello-world/
-
 use std::{net::SocketAddr, sync::Arc};
 
 use hyper::{body::Incoming, server::conn::http1};
@@ -167,7 +165,7 @@ impl Server {
     ///
     /// # Example
     /// ```
-    /// use tela::{server::{Server, IntoSocketAddr}};
+    /// use tela::server::{Server, IntoSocketAddr, Socket};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -260,7 +258,7 @@ impl Builder {
     ///
     /// # Example
     /// ```
-    /// use tela::{server::{Server, IntoSocketAddr}};
+    /// use tela::server::{Server, IntoSocketAddr, Socket};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -278,5 +276,20 @@ impl Builder {
         R: IntoRouter<S>,
     {
         self.build().serve(addr, router).await;
+    }
+}
+
+#[derive(Clone)]
+pub struct State<T>(pub T);
+pub trait FromStateRef<T: Clone>
+where
+    Self: Sized,
+{
+    fn from_state_ref(state: &T) -> State<Self>;
+}
+
+impl<T: Clone> FromStateRef<T> for T {
+    fn from_state_ref(state: &T) -> State<Self> {
+        State(state.clone())
     }
 }

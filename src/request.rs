@@ -6,23 +6,14 @@ use async_trait::async_trait;
 use http_body_util::BodyExt;
 use hyper::{
     body::{Bytes, Incoming},
-    http::{request::Parts, HeaderValue},
-    HeaderMap, Request as HttpRequest,
+    Request as HttpRequest,
 };
+pub use hyper::{Method, Uri, Version};
 use serde::Deserialize;
 
 use crate::body::{IntoBody, ParseBody};
 use crate::error::Error;
-
-pub use hyper::{Method, Uri, Version};
-
-mod from_request;
-mod from_request_parts;
-pub use from_request::FromRequest;
-pub(crate) use from_request::FromRequestOrParts;
-pub use from_request_parts::FromRequestParts;
-
-pub type Headers = HeaderMap<HeaderValue>;
+use crate::extract::{Body, Head};
 
 // These structs are for typeing
 pub struct FR;
@@ -54,8 +45,8 @@ impl Builder {
 
     /// Set the request uri.
     pub fn uri<T>(mut self, uri: T) -> Self
-    where
-        T: ToString,
+        where
+            T: ToString,
     {
         self.uri = uri.to_string().replace(" ", "%20");
         self
@@ -63,9 +54,9 @@ impl Builder {
 
     /// Add a request header.
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
-    where
-        K: ToString,
-        V: Display,
+        where
+            K: ToString,
+            V: Display,
     {
         self.headers.insert(key.to_string(), value.to_string());
         self
@@ -73,8 +64,8 @@ impl Builder {
 
     /// Set the reqeust method.
     pub fn method<M>(mut self, method: M) -> Self
-    where
-        M: ToString,
+        where
+            M: ToString,
     {
         self.method = method.to_string();
         self
@@ -98,9 +89,9 @@ impl Builder {
 
     /// Set the requests body and return the Request
     pub fn body<B, T>(self, body: T) -> HttpRequest<B>
-    where
-        B: hyper::body::Body<Data = Bytes, Error = Infallible>,
-        T: IntoBody<B>,
+        where
+            B: hyper::body::Body<Data = Bytes, Error = Infallible>,
+            T: IntoBody<B>,
     {
         let mut builder = HttpRequest::builder()
             .uri(self.uri)
@@ -115,7 +106,7 @@ impl Builder {
     }
 }
 
-/// Wrapper around a hyper::Request<Incoming> that has helpers
+/// Wrapper around a `hyper::Request<Incoming>` that has helpers
 /// for accessing and converting the data.
 ///
 /// This object also allows for sending a request as a client with the `SendRequest` trait.
@@ -155,55 +146,9 @@ impl<'r> ParseBody<'r> for Request {
     }
 }
 
-/// Represents the different parts of a requests head properites.
-#[derive(Clone)]
-pub struct Head {
-    pub method: Method,
-    pub version: Version,
-    pub headers: HeaderMap<HeaderValue>,
-    pub uri: Uri,
-}
-
-impl From<Parts> for Head {
-    fn from(value: Parts) -> Self {
-        Head {
-            method: value.method,
-            version: value.version,
-            headers: value.headers,
-            uri: value.uri,
-        }
-    }
-}
-
-impl Head {
-    pub fn new(request: &hyper::Request<Incoming>) -> Self {
-        Head {
-            method: request.method().clone(),
-            version: request.version(),
-            headers: request.headers().clone(),
-            uri: request.uri().clone(),
-        }
-    }
-}
-
-/// Wrapper around a request `hyper::body::Incoming` body.
-///
-/// This wrapper has utility methods for converting the body to another data type.
-pub struct Body(Incoming);
-#[async_trait]
-impl<'r> ParseBody<'r> for Body {
-    async fn text(self) -> Result<String, Error> {
-        String::from_utf8(self.0.collect().await.unwrap().to_bytes().to_vec()).map_err(Error::from)
-    }
-
-    async fn raw(self) -> Vec<u8> {
-        self.0.collect().await.unwrap().to_bytes().to_vec()
-    }
-}
-
 impl<'r> Request {
     /// A new wrapper around a hyper::Request.
-    pub fn new(req: HttpRequest<Incoming>) -> Self {
+    pub fn new(req: hyper::Request<Incoming>) -> Self {
         Request::from(req)
     }
 
@@ -241,20 +186,5 @@ impl<'r> Request {
                 .map_err(|e| e.to_string()),
             None => Err("No query available to parse".to_string()),
         }
-    }
-}
-
-#[derive(Clone)]
-pub struct State<T>(pub T);
-pub trait FromStateRef<T: Clone>
-where
-    Self: Sized,
-{
-    fn from_state_ref(state: &T) -> State<Self>;
-}
-
-impl<T: Clone> FromStateRef<T> for T {
-    fn from_state_ref(state: &T) -> State<Self> {
-        State(state.clone())
     }
 }

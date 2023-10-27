@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tela_html::Element;
 
-use crate::{error::Error, Html};
+use crate::{error::Error, response::Html};
 
 /// Parse the body into repspective types.
 ///

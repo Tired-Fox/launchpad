@@ -8,9 +8,8 @@ use hyper::body::{Bytes, Incoming};
 
 use crate::{
     error::Error,
-    request::{FromRequest, FromRequestParts},
-    response::StatusCode,
-    server::Parts,
+    extract::{FromRequest, FromRequestParts},
+    server::{Parts, StatusCode},
 };
 
 use super::handler::Handler;
@@ -105,19 +104,9 @@ impl Captures {
     }
 }
 
-impl<T> FromRequestParts<T> for Captures {
+impl<T: Send + Sync + 'static> FromRequestParts<T> for Captures {
     fn from_request_parts(
         _request: &hyper::Request<Incoming>,
-        parts: Arc<Parts<T>>,
-    ) -> Result<Self, Error> {
-        Ok(parts.catches.clone())
-    }
-}
-
-#[async_trait]
-impl<T: Send + Sync + 'static> FromRequest<T> for Captures {
-    async fn from_request(
-        _request: hyper::Request<Incoming>,
         parts: Arc<Parts<T>>,
     ) -> Result<Self, Error> {
         Ok(parts.catches.clone())
@@ -290,7 +279,7 @@ where
 
 /// Allows the dynamic route handler pointer to be called.
 #[async_trait]
-pub trait ErasedHandler<S: Send + Sync + 'static>: Send + Sync + 'static {
+pub trait ErasedHandler<S: Send + Sync + 'static = ()>: Send + Sync + 'static {
     async fn call(
         &self,
         request: hyper::Request<Incoming>,
@@ -317,7 +306,7 @@ where
 
 /// Wrapper around a route handler.
 #[derive(Clone)]
-pub struct Endpoint<S: Send + Sync + 'static>(pub Arc<dyn ErasedHandler<S>>);
+pub struct Endpoint<S: Send + Sync + 'static = ()>(pub Arc<dyn ErasedHandler<S>>);
 impl<S> Endpoint<S>
 where
     S: Send + Sync + 'static,
@@ -335,7 +324,7 @@ impl<S: Send + Sync + 'static> Debug for Endpoint<S> {
 
 /// A wrapper that holds handlers for a given route.
 #[derive(Debug)]
-pub struct Route<S: Send + Sync + 'static> {
+pub struct Route<S: Send + Sync + 'static = ()> {
     callbacks: RouteMethods<S>,
 }
 
@@ -491,7 +480,7 @@ macro_rules! make_methods {
         paste::paste! {
             /// All method handlers for a given route.
             #[derive(Debug)]
-            pub struct RouteMethods<S: Send + Sync + 'static> {
+            pub struct RouteMethods<S: Send + Sync + 'static = ()> {
                 $([<$method:lower>]: Option<Endpoint<S>>,)*
                 any: Option<Endpoint<S>>,
             }

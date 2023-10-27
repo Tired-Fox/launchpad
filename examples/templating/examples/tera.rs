@@ -1,8 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use tela::{
-    request::State,
-    server::{methods::*, Router, Server, Socket},
+    server::{State, methods::*, Router, Server, Socket},
     sync::Mutex,
     Html,
 };

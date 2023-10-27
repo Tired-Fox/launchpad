@@ -4,8 +4,8 @@ use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 
 use crate::{
+    extract::{FromRequestOrParts, FromRequestParts},
     prelude::IntoResponse,
-    request::{FromRequestOrParts, FromRequestParts},
     server::Parts,
 };
 
@@ -26,16 +26,17 @@ pub trait Handler<IN, S: Send + Sync + 'static = ()>: Send + Sync + 'static {
 }
 
 #[async_trait]
-impl<F, Fut, Res> Handler<(), ()> for F
+impl<F, Fut, Res, S> Handler<(), S> for F
 where
     F: FnOnce() -> Fut + Clone + Sync + Send + 'static,
     Fut: Future<Output = Res> + Send + 'static,
     Res: IntoResponse,
+    S: Send + Sync + 'static,
 {
     async fn handle(
         &self,
         _request: hyper::Request<Incoming>,
-        _state: Option<()>,
+        _state: Option<S>,
         _captures: Captures,
     ) -> hyper::Response<Full<Bytes>> {
         let handler = self.clone();
@@ -93,8 +94,8 @@ macro_rules! handlers {
                     state.cookies().append_response(response)
                 }
             }
-        }
 
+        }
     }
 }
 

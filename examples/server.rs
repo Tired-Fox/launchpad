@@ -1,23 +1,25 @@
 extern crate tela;
 
+use tela::server::StatusCode;
 use tela::{
-    html::{self, Html},
+    extract::Body,
+    html,
     prelude::*,
-    request::Body,
-    server::{router::get, Router, Server, StatusCode},
+    response::Html,
+    server::{router::get, Router, Server},
 };
 
 async fn not_found() -> Html<String> {
     // html::from will convert to HTML<String> while
     // html::new! will convert to tela::html::Element.
     // Either may be returned
-    html::from! {
+    html::into! {
         <h1>{StatusCode::NOT_FOUND}</h1>
     }
 }
 
 async fn hours() -> Html<String> {
-    html::from! {
+    html::into! {
         <html>
             <head>
                 <script>r#"
@@ -57,6 +59,7 @@ async fn main() {
         .serve(
             socket!(3000, 4000),
             Router::builder()
+                .state(())
                 .assets(("/images/", "examples/assets/"))
                 .route(
                     "/hours",
@@ -68,7 +71,7 @@ async fn main() {
                             }
                             "Post request works!"
                         })
-                        .fallback(not_found),
+                        .any(not_found),
                 )
                 .any(not_found),
         )

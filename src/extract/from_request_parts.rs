@@ -2,11 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use hyper::{body::Incoming, Method, StatusCode, Uri, Version};
 
+use crate::server::{FromStateRef, State};
 use crate::{prelude::Error, server::Parts};
 
-use super::{FromStateRef, Head, Headers, State};
+use super::{Head, Headers};
 
-pub trait FromRequestParts<T>
+pub trait FromRequestParts<T = ()>
 where
     Self: Send + Sized,
 {

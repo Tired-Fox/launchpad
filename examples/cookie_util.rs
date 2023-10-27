@@ -1,7 +1,7 @@
 use tela::{
     cookie::{Cookie, CookieJar, Duration, Local},
     html,
-    server::{router::get, Router, Server, Socket},
+    server::{methods::get, Router, Server, Socket},
 };
 
 const TELA_COOKIE: &'static str = "TelaCookie";
@@ -42,13 +42,16 @@ async fn handler(mut cookies: CookieJar) -> html::Element {
     }
 }
 
+#[derive(Clone)]
+struct Temp;
+
 #[tela::main]
 async fn main() {
     Server::builder()
         .on_bind(|addr| println!("Serving to {}", addr))
         .serve(
             Socket::Local(3000),
-            Router::builder().route("/", get(handler)),
+            Router::builder().route("/", get(handler)).state(()),
         )
         .await;
 }

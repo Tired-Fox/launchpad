@@ -5,10 +5,11 @@ use hyper::body::Incoming;
 
 use crate::{body::ParseBody, prelude::Error, server::Parts, Request};
 
-use super::{Body, FromRequestParts, FR, FRP};
+use super::{Body, FromRequestParts};
+use crate::request::{FR, FRP};
 
 #[async_trait]
-pub trait FromRequestOrParts<T, S>
+pub trait FromRequestOrParts<T, S = ()>
 where
     Self: Sized + Send,
 {
@@ -39,7 +40,7 @@ impl<S: Send + Sync + 'static, T: FromRequest<S>> FromRequestOrParts<FR, S> for 
 }
 
 #[async_trait]
-pub trait FromRequest<S>
+pub trait FromRequest<S = ()>
 where
     Self: Sized + Send,
 {

@@ -1,8 +1,8 @@
 use tela::{
     html,
-    Html,
+    response::Html,
     server::{
-        router::{Captures, get},
+        router::{get, Captures},
         Router, Server, Socket,
     },
 };
@@ -18,8 +18,7 @@ async fn main() {
         .on_bind(|addr| println!("Serving at {}", addr))
         .serve(
             Socket::Local(3000),
-            Router::builder()
-                .route("/blog/:...subpage/defs/:page", get(handler))
+            Router::new().route("/blog/:...subpage/defs/:page", get(handler)),
         )
         .await;
 }

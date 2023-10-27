@@ -115,6 +115,7 @@ async fn main() {
         .serve(
             Socket::Local(3000),
             Router::builder()
+                .state(())
                 .route("/", get(home))
                 .route("/", post(random_quote)),
         )

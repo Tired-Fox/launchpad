@@ -1,4 +1,3 @@
-//! https://hyper.rs/guides/1/client/basic/
 use async_trait::async_trait;
 pub use tela_macros::fetch;
 

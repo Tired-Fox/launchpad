@@ -4,9 +4,9 @@ use hyper::{body::Incoming, Response};
 use serde::Deserialize;
 use tela::{
     client::{fetch, SendRequest},
-    html::{self, Html},
-    json,
+    html, json,
     prelude::*,
+    response::Html,
     server::{
         router::{get, post},
         Router, Server, Socket,
@@ -52,6 +52,7 @@ async fn main() {
         .serve(
             Socket::Local(3000),
             Router::builder()
+                .state(())
                 .route("/posted", post(posted))
                 .route(
                     "/macro",
@@ -69,7 +70,7 @@ async fn main() {
 
                         match response.text().await {
                             Ok(text) => Html(text),
-                            Err(e) => html::from!(<strong>"Error: "{e}</strong>),
+                            Err(e) => html::into!(<strong>"Error: "{e}</strong>),
                         }
                     }),
                 )
@@ -89,7 +90,7 @@ async fn main() {
 
                         match response.text().await {
                             Ok(text) => Html(text),
-                            Err(e) => html::from!(<strong>"Error: "{e}</strong>),
+                            Err(e) => html::into!(<strong>"Error: "{e}</strong>),
                         }
                     }),
                 ),

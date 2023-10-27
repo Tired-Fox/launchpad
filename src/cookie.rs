@@ -5,18 +5,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use async_trait::async_trait;
 use chrono::{naive::NaiveDateTime, FixedOffset, TimeZone};
 pub use chrono::{DateTime, Duration, Local};
 use chrono_tz::GMT;
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 
-use crate::{
-    prelude::Error,
-    request::{FromRequest, FromRequestParts},
-    server::Parts,
-};
+use crate::{extract::FromRequestParts, prelude::Error, server::Parts};
 
 #[derive(Default, Clone, Debug)]
 pub enum SameSite {
@@ -121,7 +116,7 @@ impl Builder {
 ///
 /// This object allows the value and properties of a cookie to be built up.
 /// This doesn't include the name of the cookies. However, if `cookie.stringify("Name")` is called
-/// on the cookie it will take the cookie name and generate the header string value. Stringifying
+/// on the cookie it will take the cookie name and generate the header string value. Stringify
 /// the cookie will also replace all `;` in the cookie value with `%3B` to help reduce the
 /// limitations of the cookie value.
 ///
@@ -130,9 +125,9 @@ impl Builder {
 /// // Don't forget to enable the `cookies` feature flag
 ///
 /// // The `Local` and `Durations` objects are from the `chrono` crate
-/// use tela::cookie::{Cookie, Local, Duration};
+/// use tela::cookie::{Cookie, Local, Duration, SameSite};
 ///
-/// Cookie::new(3)
+/// Cookie::new(3);
 ///
 /// // or
 ///
@@ -146,7 +141,7 @@ impl Builder {
 ///    .path("/sub/path/here")
 ///    .same_site(SameSite::Strict)
 ///    .secure()
-///    .finish()
+///    .finish();
 ///
 /// ```
 ///
@@ -245,14 +240,15 @@ impl Cookie {
 /// - `Set` will take a cookie name along with a `Cookie` and store it in a map. This map generates
 ///     `Set-Cookie` headers for each new cookie being sent in the response.
 /// - `Delete` is the same as `set` except it will create the cookie for you and set the `Max-Age`
-///     property to -1 to tell the browser to immediatly delete the cookie.
+///     property to -1 to tell the browser to immediately delete the cookie.
 ///
 /// # Example
 /// ```
 /// // Don't forget to toggle the `cookies` feature flag
 ///
-/// use tela::cookie::{CookieJar, Cookie, Local, Duration};
-/// use tela::{server::{Server, Router, Socket, router::get}}
+/// use tela::cookie::{Cookie, CookieJar  };
+/// use tela::server::{Router, router::get, Server, Socket};
+///
 ///
 /// async fn handler(mut cookies: CookieJar) {
 ///     match cookies.get("TelaExample") {
@@ -335,19 +331,9 @@ impl CookieJar {
     }
 }
 
-impl<T> FromRequestParts<T> for CookieJar {
+impl<T: Send + Sync + 'static> FromRequestParts<T> for CookieJar {
     fn from_request_parts(
         _request: &hyper::Request<Incoming>,
-        parts: Arc<Parts<T>>,
-    ) -> Result<Self, Error> {
-        Ok(parts.cookies().clone())
-    }
-}
-
-#[async_trait]
-impl<T: Send + Sync + 'static> FromRequest<T> for CookieJar {
-    async fn from_request(
-        _request: hyper::Request<Incoming>,
         parts: Arc<Parts<T>>,
     ) -> Result<Self, Error> {
         Ok(parts.cookies().clone())

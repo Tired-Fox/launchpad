@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use http_body_util::{BodyExt, Full};
-pub use hyper::StatusCode;
 use hyper::{
+    StatusCode,
     body::{Bytes, Incoming},
     Response as HttpResponse, Version,
 };
@@ -11,7 +11,9 @@ use std::fmt::Display;
 use crate::{body::ParseBody, error::Error};
 
 mod into_response;
+mod wrapper;
 pub use into_response::IntoResponse;
+pub use wrapper::*;
 
 /// Response builder
 #[derive(Clone)]

@@ -14,14 +14,74 @@
 </div>
 
 <!-- End Header -->
-
-> *_Notice:_* The library is currently going through a rewrite to use less macros. The macro use will be redirected toward templating and helers but will be comletely optional in use. 
-
 ___
 
-Rust based web design :smile:
+Rust based web design heavily inspired by [Axum](https://docs.rs/axum/latest/axum/)
 
-Construct endpoints or error handlers like so.
+
+# High-Level Features
+
+- Routing to async handlers
+- Request extractors in handler parameters
+- Easy to use objects
+- As close to bare rust as possible
+- Minimal and optional macros
+
+# Compatibility
+Tela is designed to use [tokio](https://docs.rs/tokio/1.29.1/tokio/index.html) and [hyper](https://docs.rs/hyper/0.14.27/hyper/index.html). Some tokio and hyper objects are re-exported from tela, but if more functionality
+is desired then those crates will have to be imported by the user.
+
+# Example
+
+A simple tela "Hello, World!".
+```rust
+use tela::{server::{Server, Router, methods::get, Socket}};
+
+#[tela::main]
+async fn main() {
+    Server::builder()
+        .on_bind(|addr| println!("Serving at {}", addr))
+        .serve(
+            Socket::Local(3000),
+            Router::builder()
+                .route("/", get(|| async { "Hello, world!" }))
+        ).await;
+}
+```
+
+Note: `#[tokio::main]` can be used instead of `#[tela::main]` except it would require tokio to be added as a dependency with the
+`macros` feature. `#[tela::main]` acts like the `#[tokio::main]` macro but doesn't require tokio to be added as an additional dependency.
+
+# Routing
+[Router](crate::server::Router) is the heart of handling hyper based requests. The struct handles what path goes to which static asset or handler.
+
+```rust
+use tela::server::{Router, methods};
+
+fn main() {
+    // A router that serves static assets and two routes
+    let router = Router::builder()
+        .assets(("/", "assets/public/"))
+        .route("/", methods::get(home))
+        .route("/edit", methods::post(home));
+}
+
+// Base handlers that are called, but produce nothing
+async fn home() {}
+async fn edit() {}
+```
+See [Router](crate::server::Router) for more details on routing.
+
+# Handler
+"Handler" in tela means any async function that accepts 0 to 15 
+
+# Extractors
+# Response
+# Using State
+# Required Dependencies
+# Examples
+# Feature Flags
+
 
 ```rust
 // This is a text/plain response
@@ -117,24 +177,6 @@ async fn home() -> &'static str {
     "Hello, world!"
 }
 ```
-
-**Inspiration**
-- [Axum](https://github.com/tokio-rs/axum)
-- [Actix](https://github.com/actix/actix-web)
-- [Warp](https://github.com/seanmonstar/warp)
-- [Rocket](https://rocket.rs/)
-
-**Tools**
-- [Tokio](https://tokio.rs/)
-- [Hyper](https://hyper.rs/) - Focus on `1.0 release`
-- [Tower](https://github.com/tower-rs/tower)
-
-- [proc-macro-errors](https://docs.rs/proc-macro-error/latest/proc_macro_error/)
-- [proc-macro2](https://docs.rs/proc-macro2/latest/proc_macro2/)
-- [quote](https://docs.rs/quote/latest/quote/)
-- [syn](https://docs.rs/syn/latest/syn/)
-
-- [typed-html](https://crates.io/crates/typed-html/0.2.2) and [html-to-string-macro](https://docs.rs/html-to-string-macro/latest/src/html_to_string_macro/lib.rs.html#96-105) for html macro inspiration . 
 
 <!-- Footer Badges -->
 

@@ -26,6 +26,7 @@ pub struct Builder<S: Send + Sync + Clone + 'static = ()> {
     routes: Routes<S>,
     assets: HashMap<String, PathBuf>,
     state: Option<S>,
+    any: Option<Endpoint<S>>,
 }
 
 impl<T: Send + Sync + Clone + 'static> Builder<T> {
@@ -50,7 +51,7 @@ impl<T: Send + Sync + Clone + 'static> Builder<T> {
     ///
     /// async fn main() {
     ///     let _ = Router::new()
-    ///         .route("/", get(get_handler).post(post_handler).any(any_handler))
+    ///         .route("/", get(get_handler).post(post_handler).any(any_handler));
     /// }
     /// ```
     pub fn route(mut self, path: &str, handler: Route<T>) -> Self {
@@ -90,18 +91,13 @@ impl<T: Send + Sync + Clone + 'static> Builder<T> {
     ///
     /// This handler is only called if a handler for any other defined route is not found. The
     /// handler passed in can be thought of as the last resort handler for a `404`.
-    pub fn any<H, F>(self, handler: H) -> Router<T>
+    pub fn any<H, F>(mut self, handler: H) -> Builder<T>
     where
         H: Handler<F, T>,
         F: Send + Sync + 'static,
     {
-        Router {
-            handler: None,
-            assets: self.assets.into(),
-            routes: Arc::new(Mutex::new(self.routes)),
-            any: Some(Endpoint::new(BoxedHandler::from_handler(handler))),
-            state: self.state,
-        }
+        self.any = Some(Endpoint::new(BoxedHandler::from_handler(handler)));
+        self
     }
 
     pub fn state(mut self, state: T) -> Self {
@@ -114,7 +110,7 @@ impl<T: Send + Sync + Clone + 'static> Builder<T> {
             handler: None,
             assets: self.assets.into(),
             routes: Arc::new(Mutex::new(self.routes)),
-            any: None,
+            any: self.any,
             state: self.state,
         }
     }
@@ -192,6 +188,7 @@ impl<S: Send + Sync + Clone + 'static> Router<S> {
         Builder {
             routes: Routes::new(),
             assets: HashMap::new(),
+            any: None,
             state: None,
         }
     }
