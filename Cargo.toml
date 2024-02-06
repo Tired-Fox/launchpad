@@ -7,29 +7,46 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.79"
-fastwebsockets = { version = "0.6.0", features = [
-  "base64",
-  "http-body-util",
-  "hyper",
-  "hyper-util",
-  "pin-project",
-  "upgrade",
-  "simdutf8",
-] }
 http-body-util = "0.1.0"
 hyper = { version = "1.1.0", features = ["client", "http1", "server"] }
-hyper-util = { version = "0.1.3", default_features = false, features = [
-  "full",
+hyper-util = { version = "0.1.3", features = [
+    "full",
 ] }
-pin-project-lite = "0.2.13"
 tokio = { version = "1.36.0", features = [
-  "net",
-  "rt",
-  "fs",
-  "macros",
-  "rt-multi-thread",
+    "net",
+    "rt",
+    "fs",
+    "macros",
+    "rt-multi-thread",
 ] }
-tower = "0.4.13"
-tungstenite = { version = "0.21.0", features=["native-tls"] }
-tokio-tungstenite = "0.21.0"
 futures = "0.3.30"
+
+# Dependencies for websocket based on https://github.com/de-vri-es/hyper-tungstenite-rs
+pin-project-lite = "0.2.13"
+tower = { version = "0.4.13", features = ["timeout", "retry", "load-shed", "limit", "balance", "steer", "buffer", "load", "hedge", "discover", "filter", "make", "ready-cache", "reconnect", "spawn-ready", "util"] }
+tower-http = { version = "0.5.1", features = ["cors"] }
+tungstenite = "0.21.0"
+rustls = { version = "0.22.2", optional = true }
+tokio-tungstenite = "0.21.0"
+
+[features]
+default=["middleware"]
+tls = ["tungstenite/rustls", "dep:rustls"]
+middleware = [
+    "tower/timeout",
+    "tower/retry",
+    "tower/load-shed",
+    "tower/limit",
+    "tower/balance",
+    "tower/steer",
+    "tower/buffer",
+    "tower/load",
+    "tower/hedge",
+    "tower/discover",
+    "tower/filter",
+    "tower/make",
+    "tower/ready-cache",
+    "tower/reconnect",
+    "tower/spawn-ready",
+    "tower/util"
+]

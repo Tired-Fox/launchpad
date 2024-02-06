@@ -1,17 +1,17 @@
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
-use tela::websocket::{connect, upgrade, Websocket, Message};
 use std::{convert::Infallible, future::Future, net::SocketAddr, pin::Pin};
+use std::task::Poll;
 
 use anyhow::Result;
 use http_body_util::Full;
 use hyper::{
     body::{Bytes, Incoming},
-    server::conn::http1,
-    Method, Request, Response,
+    Method,
+    Request, Response, server::conn::http1,
 };
 use hyper_util::{rt::TokioIo, service::TowerToHyperService};
 use tokio::net::TcpListener;
+
+use tela::websocket::{connect, Message, prelude::*, upgrade, Websocket};
 
 static ERROR_PAGE: &str = r#"
 <html>
@@ -120,8 +120,8 @@ impl tower::Service<Request<Incoming>> for Router {
     fn poll_ready(
         &mut self,
         _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::result::Result<(), Self::Error>> {
-        std::task::Poll::Ready(Ok(()))
+    ) -> Poll<std::result::Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: Request<Incoming>) -> Self::Future {

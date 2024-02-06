@@ -1,5 +1,3 @@
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
 use tela::websocket::{connect, upgrade, Websocket, Message};
 use std::{convert::Infallible, future::Future, net::SocketAddr, pin::Pin};
 
